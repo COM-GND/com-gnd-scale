@@ -99,7 +99,7 @@ float readADC(byte inpsel)
 
   while (1)
   {
-    Serial.println("Reading");
+    // Serial.println("Reading");
     if ((digitalRead(ADS1262_DRDY_PIN)) == LOW) // monitor Data ready(DRDY pin)
     {
       SPI_RX_Buff_Ptr = PC_ADS1262.ads1262_Read_Data(); // read 6 bytes conversion register
@@ -108,11 +108,11 @@ float readADC(byte inpsel)
 
     if (Responsebyte == true)
     {
-      Serial.println("Raw Data");
+      // Serial.println("Raw Data");
       for (i = 0; i < 5; i++)
       {
         SPI_RX_Buff[SPI_RX_Buff_Count] = *(SPI_RX_Buff_Ptr + i);
-        Serial.println((unsigned char)SPI_RX_Buff[SPI_RX_Buff_Count]);
+        // Serial.println((unsigned char)SPI_RX_Buff[SPI_RX_Buff_Count]);
         SPI_RX_Buff_Count++;
       }
       Responsebyte = false;
@@ -127,7 +127,7 @@ float readADC(byte inpsel)
       uads1262Count = (signed long)(((unsigned long)ads1262_rx_Data[0] << 24) | ((unsigned long)ads1262_rx_Data[1] << 16) | (ads1262_rx_Data[2] << 8) | ads1262_rx_Data[3]); //get the raw 32-bit adc count out by shifting
       sads1262Count = (signed long)(uads1262Count);                                                                                                                          // get signed value
       resolution = (double)((double)VREF / pow(2, 31));                                                                                                                      //resolution= Vref/(2^n-1) , Vref=2.5, n=no of bits
-      Serial.print(resolution, 15);
+      // Serial.print(resolution, 15);
       volt_V = (resolution) * (float)sads1262Count; // voltage = resolution * adc count
       volt_mV = volt_V * 1000;                      // voltage in mV
       SPI_RX_Buff_Count = 0;

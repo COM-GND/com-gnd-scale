@@ -31,13 +31,13 @@ const int ADS1262_CS_PIN = 5;
 const int ADS1262_START_PIN = 23;
 const int ADS1262_PWDN_PIN = 16;
 
-//register address
-#define POWER 0x01
-#define INTERFACE 0x02
-#define MODE0 0x03
-#define MODE1 0x04
-#define MODE2 0x05
-#define INPMUX 0x06
+//register address - see section 9.6 of the data sheet
+#define POWER 0x01     // RESET, VBIAS, INTREF
+#define INTERFACE 0x02 // TIMEOUT, STATUS, CRC
+#define MODE0 0x03     // REFREV, RUNMODE, CHOP, DELAY,
+#define MODE1 0x04     // FILTER, SBADC, SBPOL, SBMAG,
+#define MODE2 0x05     // PGA BYPASS, GAIN, DR (data rate)
+#define INPMUX 0x06    // MUXP, MUXN
 #define OFCAL0 0x07
 #define OFCAL1 0x08
 #define OFCAL2 0x09

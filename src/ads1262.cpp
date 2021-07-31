@@ -50,57 +50,57 @@ void ads1262::ads1262_Init()
     //  ads1262_Stop_Read_Data_Continuous();					// SDATAC command
     delay(300);
 
-    ads1262_Reg_Write(POWER, 0x13); //Set sampling rate to 125 SPS
+    ads1262_Reg_Write(POWER, 0x11); // Reset default, Level shift V Disabled, Internal Ref Enabled
     delay(10);
-    ads1262_Reg_Write(INTERFACE, 0x05); //Lead-off comp off, test signal disabled
+    ads1262_Reg_Write(INTERFACE, 0x05); // Serial Timout Disabled, Status Byte Enabled, Checksum byte enabled in 'checksum mode' during conversion data read-back
     delay(10);
-    ads1262_Reg_Write(MODE0, 0x00); //Lead-off defaults
+    ads1262_Reg_Write(MODE0, 0x00); // Normal Mux Polarity, Continuous ADC conversion, Input chop and IDAC rotation disabled, no conversion delay
     delay(10);
-    ads1262_Reg_Write(MODE1, 0x80); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(MODE1, 0x80); // FIR Filter, Sensor Bias on to ADC1, Sensor Bias Pullup mode, No Sensor Bias
     delay(10);
-    ads1262_Reg_Write(MODE2, 0x06); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(MODE2, 0x06); // PGA Enabled, 1V/V gain, 60 SPS
     delay(10);
-    ads1262_Reg_Write(INPMUX, 0x01); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(INPMUX, 0x01); // AIN0 Positive Input Multiplexer, AIN1 Negative Input Multiplexer,
     delay(10);
-    ads1262_Reg_Write(OFCAL0, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(OFCAL0, 0x00); // 0 Offset Calibration
     delay(10);
-    ads1262_Reg_Write(OFCAL1, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(OFCAL1, 0x00); // 0 Offset Calibration
     delay(10);
-    ads1262_Reg_Write(OFCAL2, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(OFCAL2, 0x00); // 0 Offset Calibration
     delay(10);
-    ads1262_Reg_Write(FSCAL0, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(FSCAL0, 0x00); // 0 Fullscare Calibration
     delay(10);
-    ads1262_Reg_Write(FSCAL1, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(FSCAL1, 0x00); // 0 Fullscare Calibration
     delay(10);
-    ads1262_Reg_Write(FSCAL2, 0x40); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(FSCAL2, 0x40); // 0x40 Fullscare Calibration
     delay(10);
-    ads1262_Reg_Write(IDACMUX, 0xBB); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(IDACMUX, 0xBB); // IDAC2 Output Multiplexer No Connection, IDAC1 Output Multiplexer No Connection
     delay(10);
-    ads1262_Reg_Write(IDACMAG, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(IDACMAG, 0x00); // IDAC2 Current Magnitude off, IDAC1 Current Magnitude off
     delay(10);
-    ads1262_Reg_Write(REFMUX, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(REFMUX, 0x00); // Ref positive Input: 2.5 Internval V ref, Ref negative Input: 2.5 Internval V ref
     delay(10);
-    ads1262_Reg_Write(TDACP, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(TDACP, 0x00); // TDACP: no connection, MAGP Output: unset
     delay(10);
-    ads1262_Reg_Write(TDACN, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(TDACN, 0x00); // TDACN Output: No connection, MAGN Output: unser
     delay(10);
-    ads1262_Reg_Write(GPIOCON, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(GPIOCON, 0x00); // All GPIO: not connected
     delay(10);
-    ads1262_Reg_Write(GPIODIR, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(GPIODIR, 0x00); // All GPIO Dir: output
     delay(10);
-    ads1262_Reg_Write(GPIODAT, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(GPIODAT, 0x00); // All GPIO (read mode, defaults)
     delay(10);
-    ads1262_Reg_Write(ADC2CFG, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2CFG, 0x00); // ADC2 Data Rate: 10 SPS, ADC2 Ref input: Internal 2.5V ref, ADC2 Gain: 1 V/V
     delay(10);
-    ads1262_Reg_Write(ADC2MUX, 0x01); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2MUX, 0x01); // ADC2 Pos Input Mx: AIN0, ADC2 Neg, Input Mx: AIN1
     delay(10);
-    ads1262_Reg_Write(ADC2OFC0, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2OFC0, 0x00); // ADC2 0 Offset Calibration
     delay(10);
-    ads1262_Reg_Write(ADC2OFC1, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2OFC1, 0x00); // ADC2 0 Offset Calibration
     delay(10);
-    ads1262_Reg_Write(ADC2FSC0, 0x00); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2FSC0, 0x00); // ADC2 0 Fullscal Calibration
     delay(10);
-    ads1262_Reg_Write(ADC2FSC1, 0x40); //Ch 1 enabled, gain 6, connected to electrode in
+    ads1262_Reg_Write(ADC2FSC1, 0x40); // ADC2 0x40 Fullscal Calibration
     delay(10);
     // ads1262_Start_Read_Data_Continuous();
     delay(10);
