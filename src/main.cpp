@@ -28,7 +28,7 @@
 
 // ADC Configs
 #define PGA 1
-#define VREF 3.40
+#define VREF 2.50 // internal voltage reference
 #define VFSR VREF / PGA
 #define FSR (((long int)1 << 23) - 1)
 
@@ -94,12 +94,14 @@ float readADC(byte inpsel)
 {
   volatile int i, data;
 
-  PC_ADS1262.ads1262_Reg_Write(INPMUX, inpsel); //Ch 1 enabled, gain 6, connected to electrode in
+  //PC_ADS1262.ads1262_Reg_Write(INPMUX, inpsel); //Ch 1 enabled, gain 6, connected to electrode in
+  //Serial.println(INPMUXP_AIN2 | INPMUXN_AIN3, BIN);
+  // PC_ADS1262.ads1262_Reg_Write(INPMUX, 0);
   //delay(100);
 
   while (1)
   {
-    // Serial.println("Reading");
+    Serial.println("Reading");
     if ((digitalRead(ADS1262_DRDY_PIN)) == LOW) // monitor Data ready(DRDY pin)
     {
       SPI_RX_Buff_Ptr = PC_ADS1262.ads1262_Read_Data(); // read 6 bytes conversion register
@@ -271,7 +273,7 @@ void loop()
   //pwr=abs(readADC(0x0a+channel*16));
   pwr = readADC(0 + channel * 16);
   Serial.print("Data: ");
-  Serial.print(pwr);
+  Serial.printf("%0.6f", pwr);
   Serial.println(" mV");
   delay(200);
 }
