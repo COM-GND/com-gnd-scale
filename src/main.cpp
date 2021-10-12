@@ -7,8 +7,7 @@
 #include <BLEUtils.h>
 #include <BLEServer.h>
 #include <BLE2902.h>
-
-#include "ads1262.h"
+#include <ADS126X.h>
 
 // https://btprodspecificationrefs.blob.core.windows.net/assigned-values/16-bit%20UUID%20Numbers%20Document.pdf
 /**
@@ -32,13 +31,17 @@
 #define VFSR VREF / PGA
 #define FSR (((long int)1 << 23) - 1)
 
-ads1262 PC_ADS1262; // class
+// ads1262 PC_ADS1262; // class
+ADS126X adc;         // start the class
+int chip_select = 5; // Arduino pin connected to CS on ADS126X
+int pos_pin = 0;     // ADS126X pin AIN0, for positive input
+int neg_pin = 1;     // ADS126X pin AIN1, for negative input
 
 // HSFPAR303A force sensor
 /*
 Pin 1 vdd
-pin 2 v1
-pin 3 v2
+pin 2 v1 Out + -> A0
+pin 3 v2 Out - -> A1
 pin 4 gnd
 */
 
@@ -89,59 +92,6 @@ BLECharacteristic *pPressureTargetBLEChar = NULL;
 BLECharacteristic *pPumpPowerBLEChar = NULL;
 BLECharacteristic *pTemperatureSensorBLEChar = NULL;
 BLECharacteristic *pFlowSensorBLEChar = NULL;
-
-float readADC(byte inpsel)
-{
-  volatile int i, data;
-
-  //PC_ADS1262.ads1262_Reg_Write(INPMUX, inpsel); //Ch 1 enabled, gain 6, connected to electrode in
-  //Serial.println(INPMUXP_AIN2 | INPMUXN_AIN3, BIN);
-  // PC_ADS1262.ads1262_Reg_Write(INPMUX, 0);
-  //delay(100);
-
-  while (1)
-  {
-    Serial.println("Reading");
-    if ((digitalRead(ADS1262_DRDY_PIN)) == LOW) // monitor Data ready(DRDY pin)
-    {
-      SPI_RX_Buff_Ptr = PC_ADS1262.ads1262_Read_Data(); // read 6 bytes conversion register
-      Responsebyte = true;
-    }
-
-    if (Responsebyte == true)
-    {
-      // Serial.println("Raw Data");
-      for (i = 0; i < 5; i++)
-      {
-        SPI_RX_Buff[SPI_RX_Buff_Count] = *(SPI_RX_Buff_Ptr + i);
-        // Serial.println((unsigned char)SPI_RX_Buff[SPI_RX_Buff_Count]);
-        SPI_RX_Buff_Count++;
-      }
-      Responsebyte = false;
-    }
-
-    if (SPI_RX_Buff_Count >= 5)
-    {
-      ads1262_rx_Data[0] = (unsigned char)SPI_RX_Buff[1]; // read 4 bytes adc count
-      ads1262_rx_Data[1] = (unsigned char)SPI_RX_Buff[2];
-      ads1262_rx_Data[2] = (unsigned char)SPI_RX_Buff[3];
-      ads1262_rx_Data[3] = (unsigned char)SPI_RX_Buff[4];
-      uads1262Count = (signed long)(((unsigned long)ads1262_rx_Data[0] << 24) | ((unsigned long)ads1262_rx_Data[1] << 16) | (ads1262_rx_Data[2] << 8) | ads1262_rx_Data[3]); //get the raw 32-bit adc count out by shifting
-      sads1262Count = (signed long)(uads1262Count);                                                                                                                          // get signed value
-      resolution = (double)((double)VREF / pow(2, 31));                                                                                                                      //resolution= Vref/(2^n-1) , Vref=2.5, n=no of bits
-      // Serial.print(resolution, 15);
-      volt_V = (resolution) * (float)sads1262Count; // voltage = resolution * adc count
-      volt_mV = volt_V * 1000;                      // voltage in mV
-      SPI_RX_Buff_Count = 0;
-      return volt_mV;
-    }
-  }
-}
-
-float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
 
 // https://github.com/nkolban/ESP32_BLE_Arduino/blob/master/examples/BLE_notify/BLE_notify.ino
 class ComGndServerCallbacks : public BLEServerCallbacks
@@ -251,13 +201,19 @@ void setup()
   digitalWrite(8, HIGH);
 
   // initalize the  data ready and chip select pins:
-  pinMode(ADS1262_DRDY_PIN, INPUT);   //data ready input line
-  pinMode(ADS1262_CS_PIN, OUTPUT);    //chip enable output line
-  pinMode(ADS1262_START_PIN, OUTPUT); // start
-  pinMode(ADS1262_PWDN_PIN, OUTPUT);  // Power down output
-
+  // pinMode(ADS1262_DRDY_PIN, INPUT);   //data ready input line
+  // pinMode(ADS1262_CS_PIN, OUTPUT);    //chip enable output line
+  // pinMode(ADS1262_START_PIN, OUTPUT); // start
+  // pinMode(ADS1262_PWDN_PIN, OUTPUT);  // Power down output
+  pinMode(16, OUTPUT); // ADC1262 PWDN Pin
+  digitalWrite(16, HIGH);
   digitalWrite(8, LOW);
-  PC_ADS1262.ads1262_Init(); // initialise ads1262
+
+  adc.setStartPin(23);
+  adc.begin(chip_select);
+  adc.enablePGA();
+  adc.setGain(ADS126X_GAIN_1);
+  adc.startADC1();
 
   //xTaskCreate(bleNotifyTask, "bleNotify", 5000, NULL, 1, NULL);
 }
@@ -267,13 +223,21 @@ void setup()
  */
 void loop()
 {
-  float pwr;
-  byte channel;
-  channel = 1;
-  //pwr=abs(readADC(0x0a+channel*16));
-  pwr = readADC(0 + channel * 16);
-  Serial.print("Data: ");
-  Serial.printf("%0.6f", pwr);
-  Serial.println(" mV");
-  delay(200);
+  // float pwr;
+  // byte channel;
+  // channel = 1;
+  // //pwr=abs(readADC(0x0a+channel*16));
+  // pwr = readADC(0 + channel * 16);
+  // Serial.print("Data: ");
+  // Serial.printf("%0.6f", pwr);
+  // Serial.println(" mV");
+  // delay(200);
+
+  long outputCode = adc.readADC1(pos_pin, neg_pin); // read the voltage
+  Serial.println(outputCode);                       // send voltage through serial
+
+  // long voltage = outputCode * LSb_size;
+  //Serial.printf("%0.6f", (double)voltage);
+  Serial.println("");
+  delay(100);
 }
