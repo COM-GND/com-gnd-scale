@@ -26,10 +26,15 @@
 #define BARS_UNIT_ID "2780"
 
 // ADC Configs
-#define PGA 1
-#define VREF 2.50 // internal voltage reference
-#define VFSR VREF / PGA
-#define FSR (((long int)1 << 23) - 1)
+#define ADC_VREF 5  // external voltage reference
+#define ADC_GAIN 32 // the gain
+
+// ALPS HSFPARx003 Configs
+#define ALPS_SENSITIVITY 3.7                               // mV/V/N
+#define ALPS_CAPACITY 8                                    // newtons
+#define ALPS_FULLSCALE_RANGE_MV ADC_VREF *ALPS_SENSITIVITY // mV at 8 newtons
+
+#define ADC_FSR_MV ALPS_FULLSCALE_RANGE_MV *ADC_GAIN // mV - The ADC's fullscale range
 
 // ads1262 PC_ADS1262; // class
 ADS126X adc;         // start the class
@@ -45,8 +50,6 @@ pin 3 v2 Out - -> A1
 pin 4 gnd
 */
 
-float volt_V = 0;
-float volt_mV = 0;
 volatile int i;
 volatile char SPI_RX_Buff[10];
 volatile long ads1262_rx_Data[10];
@@ -55,9 +58,9 @@ volatile char *SPI_RX_Buff_Ptr;
 volatile int Responsebyte = false;
 volatile signed long sads1262Count = 0;
 volatile signed long uads1262Count = 0;
-double resolution;
+double adcResolution;
 
-float readADC(byte inpsel);
+// float readADC(byte inpsel);
 
 /** 
  * Pins 
@@ -73,13 +76,21 @@ float readADC(byte inpsel);
 // https://learn.sparkfun.com/tutorials/bi-directional-logic-level-converter-hookup-guide
 // https://www.arduino.cc/en/reference/wire
 
-const unsigned char i2cSda = 23; // i2c data line
-const unsigned char i2cScl = 22; // i2c clock line
+// const unsigned char i2cSda = 23; // i2c data line
+// const unsigned char i2cScl = 22; // i2c clock line
 
+/**
+ * SPI - ESP32-devkit-c standard outputs for VSPI
+ * SPID = MOSI = data out - VSPI uses GPIO23
+ * SPIQ = MISO = data in - VSPI uses GPIO19
+ * VSPIWP = START VSPI uses GPIO22
+ * CK = CLK - VSPI uses GPIO18
+ * CS = VSPICSO uses GPIO5
+ */
 /**
  * I2C Globals
  */
-TwoWire I2C = TwoWire(0);
+// TwoWire I2C = TwoWire(0);
 
 /**
  * Bluetooth Globals
@@ -155,7 +166,7 @@ void setup()
   Serial.begin(115200);
 
   // flow sensor support 100k and 400k freq
-  I2C.begin(i2cSda, i2cScl, 100000);
+  // I2C.begin(i2cSda, i2cScl, 100000);
 
   BLEDevice::init("COM-GND Scale");
   Serial.println("BLE Device Initialized");
@@ -196,23 +207,44 @@ void setup()
   Serial.println("BLE Advertizing Started");
   Serial.println("BLE Setup Complete");
 
-  pinMode(8, OUTPUT);
+  // pinMode(8, OUTPUT);
   Serial.begin(115200);
-  digitalWrite(8, HIGH);
+  // digitalWrite(8, HIGH);
 
   // initalize the  data ready and chip select pins:
   // pinMode(ADS1262_DRDY_PIN, INPUT);   //data ready input line
   // pinMode(ADS1262_CS_PIN, OUTPUT);    //chip enable output line
   // pinMode(ADS1262_START_PIN, OUTPUT); // start
   // pinMode(ADS1262_PWDN_PIN, OUTPUT);  // Power down output
-  pinMode(16, OUTPUT); // ADC1262 PWDN Pin
-  digitalWrite(16, HIGH);
-  digitalWrite(8, LOW);
+  // pinMode(16, OUTPUT); // ADC1262 PWDN Pin
+  // digitalWrite(16, HIGH);
+  // digitalWrite(8, LOW);
 
-  adc.setStartPin(23);
+  adcResolution = (double)((double)ADC_VREF / pow(2, 31));
   adc.begin(chip_select);
+  adc.setStartPin(22);
+
+  // We use the excitation voltage as the reference for Ratiometric Measurement
+  // GNDA is connected to AIN5, +5A is connected to AIN4
+  adc.setReference(ADS126X_REF_NEG_AIN5, ADS126X_REF_POS_AIN4);
+  adc.setContinuousMode();
+  // // Set Sample Rate to 100 SPS
+  adc.setRate(ADS126X_RATE_60);
+  adc.setFilter(ADS126X_SINC3);
+  // // adc.setRate(ADS126X_RATE_20);
+  // // adc.setFilter(ADS126X_FIR);
+  // // Enable Chop mode - note: chop mode disables offset callibration registers (SFOCAL1 and SYOCAL1)
+  adc.setChopMode(ADS126X_CHOP_1);
+
+  uint8_t gainRegBefore = adc.readRegister(ADS126X_MODE2);
+  adc.setGain(ADS126X_GAIN_32);
+  uint8_t gainRegAfter = adc.readRegister(ADS126X_MODE2);
+  Serial.print("gain: ");
+  Serial.print(gainRegBefore, BIN);
+  Serial.print(" -> ");
+  Serial.print(gainRegAfter, BIN);
+  Serial.println("");
   adc.enablePGA();
-  adc.setGain(ADS126X_GAIN_1);
   adc.startADC1();
 
   //xTaskCreate(bleNotifyTask, "bleNotify", 5000, NULL, 1, NULL);
@@ -234,10 +266,17 @@ void loop()
   // delay(200);
 
   long outputCode = adc.readADC1(pos_pin, neg_pin); // read the voltage
-  Serial.println(outputCode);                       // send voltage through serial
-
+  float volt_V = (adcResolution) * (float)outputCode;
+  float volt_mV = volt_V * 1000.0; // voltage in mV
+  float newtonsPerMv = ADC_FSR_MV / 8;
+  float percent = (volt_mV / 592.0);
+  float newtons = percent * 8.0;
+  float grams = newtons * 101.97162;
+  //Serial.println(newtons);
+  Serial.print("g: " + String(grams, 6) + " mV: " + String(volt_mV, 6) + " FSR: " + ADC_FSR_MV + " raw: " + String(outputCode) + " b: "); // send voltage through serial
+  Serial.println(outputCode, BIN);
   // long voltage = outputCode * LSb_size;
   //Serial.printf("%0.6f", (double)voltage);
-  Serial.println("");
+  // Serial.println("");
   delay(100);
 }
