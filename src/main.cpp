@@ -42,13 +42,28 @@ int chip_select = 5; // Arduino pin connected to CS on ADS126X
 int pos_pin = 0;     // ADS126X pin AIN0, for positive input
 int neg_pin = 1;     // ADS126X pin AIN1, for negative input
 
+// Reference Voltage
+const float adcVRef = 5.0;
+// Gain
+const float adcPga = 32.0;
+// ADC fullscale range
+const double adcFsr = (double)((double)adcVRef / (double)adcPga);
+
+//const double adcResolution = (double)((double)adcVRef / pow(2, 31));
+
 // HSFPAR303A force sensor
 /*
 Pin 1 vdd
-pin 2 v1 Out + -> A0
-pin 3 v2 Out - -> A1
+pin 2 v1 Out + -> AIN0
+pin 3 v2 Out - -> AIN1
 pin 4 gnd
 */
+
+const float cellSensitivity = 3.7;
+const float cellMaxLoad = 8.0;
+const float cellFsr = cellSensitivity * adcVRef;
+
+const double adcResolution = (double)((double)adcFsr / (double)(pow(2, 31)));
 
 volatile int i;
 volatile char SPI_RX_Buff[10];
@@ -58,7 +73,8 @@ volatile char *SPI_RX_Buff_Ptr;
 volatile int Responsebyte = false;
 volatile signed long sads1262Count = 0;
 volatile signed long uads1262Count = 0;
-double adcResolution;
+
+signed long int adcOffset = 0;
 
 // float readADC(byte inpsel);
 
@@ -220,7 +236,6 @@ void setup()
   // digitalWrite(16, HIGH);
   // digitalWrite(8, LOW);
 
-  adcResolution = (double)((double)ADC_VREF / pow(2, 31));
   adc.begin(chip_select);
   adc.setStartPin(22);
 
@@ -229,15 +244,14 @@ void setup()
   adc.setReference(ADS126X_REF_NEG_AIN5, ADS126X_REF_POS_AIN4);
   adc.setContinuousMode();
   // // Set Sample Rate to 100 SPS
-  adc.setRate(ADS126X_RATE_60);
-  adc.setFilter(ADS126X_SINC3);
+
   // // adc.setRate(ADS126X_RATE_20);
   // // adc.setFilter(ADS126X_FIR);
   // // Enable Chop mode - note: chop mode disables offset callibration registers (SFOCAL1 and SYOCAL1)
   adc.setChopMode(ADS126X_CHOP_1);
 
   uint8_t gainRegBefore = adc.readRegister(ADS126X_MODE2);
-  adc.setGain(ADS126X_GAIN_32);
+  // adc.setGain(ADS126X_GAIN_32);
   uint8_t gainRegAfter = adc.readRegister(ADS126X_MODE2);
   Serial.print("gain: ");
   Serial.print(gainRegBefore, BIN);
@@ -247,6 +261,25 @@ void setup()
   adc.enablePGA();
   adc.startADC1();
 
+  delay(500);
+  // tare
+  signed long int offsetTotal = 0;
+  for (uint8_t i = 0; i < 10; i++)
+  {
+    offsetTotal += adc.readADC1(pos_pin, neg_pin); // read the voltage
+    Serial.println(" Offset total: " + String(offsetTotal));
+
+    delay(100);
+  }
+
+  adcOffset = (double)round(offsetTotal / 10);
+
+  adc.setRate(ADS126X_RATE_60);
+  adc.setFilter(ADS126X_SINC3);
+
+  Serial.println("ADC Res: " + String(adcResolution, 6));
+
+  Serial.println("ADC Offset: " + String(adcOffset) + " Offset total: " + String(offsetTotal));
   //xTaskCreate(bleNotifyTask, "bleNotify", 5000, NULL, 1, NULL);
 }
 
@@ -265,15 +298,23 @@ void loop()
   // Serial.println(" mV");
   // delay(200);
 
-  long outputCode = adc.readADC1(pos_pin, neg_pin); // read the voltage
-  float volt_V = (adcResolution) * (float)outputCode;
-  float volt_mV = volt_V * 1000.0; // voltage in mV
-  float newtonsPerMv = ADC_FSR_MV / 8;
-  float percent = (volt_mV / 592.0);
-  float newtons = percent * 8.0;
+  signed long int outputCode = adc.readADC1(pos_pin, neg_pin); // read the voltage
+  outputCode -= adcOffset;
+
+  // fullscale voltage =
+  float voltage = (float)((adcResolution)*outputCode);
+  // float volt_mV = (float)(volt_V * 1000.0); // voltage in mV
+  // double voltage = (double)(outputCode * (adcVRef / adcPga * exp2(31)));
+  float newtonsPerMv = cellFsr / cellMaxLoad;
+  float newtons = voltage * 1000.0 * newtonsPerMv;
+  // float vNewtons = voltage * cellMaxLoad;
+  // float newtons = vNewtons / (cellSensitivity * adcFsr);
+  // float mvPerNewton = 18.5 / 8.0;
+  // float percent = (float)(volt_mV / 592.0);
+  // float newtons = volt_V * 3.7;
   float grams = newtons * 101.97162;
   //Serial.println(newtons);
-  Serial.print("g: " + String(grams, 6) + " mV: " + String(volt_mV, 6) + " FSR: " + ADC_FSR_MV + " raw: " + String(outputCode) + " b: "); // send voltage through serial
+  Serial.print("g: " + String(grams, 6) + " n: " + String(newtons, 6) + " v:" + String(voltage, 16) + " FSR: " + String(adcFsr, 6) + " raw: " + String(outputCode) + " b: "); // send voltage through serial
   Serial.println(outputCode, BIN);
   // long voltage = outputCode * LSb_size;
   //Serial.printf("%0.6f", (double)voltage);
