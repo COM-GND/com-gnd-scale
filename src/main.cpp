@@ -8,6 +8,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <ADS126X.h>
+#include <Smoothed.h>
 
 // https://btprodspecificationrefs.blob.core.windows.net/assigned-values/16-bit%20UUID%20Numbers%20Document.pdf
 /**
@@ -37,46 +38,9 @@
 #define ADC_FSR_MV ALPS_FULLSCALE_RANGE_MV *ADC_GAIN // mV - The ADC's fullscale range
 
 // ads1262 PC_ADS1262; // class
-ADS126X adc;         // start the class
-int chip_select = 5; // Arduino pin connected to CS on ADS126X
-int pos_pin = 0;     // ADS126X pin AIN0, for positive input
-int neg_pin = 1;     // ADS126X pin AIN1, for negative input
-
-// Reference Voltage
-const float adcVRef = 5.0;
-// Gain
-const float adcPga = 32.0;
-// ADC fullscale range
-const double adcFsr = (double)((double)adcVRef / (double)adcPga);
-
-//const double adcResolution = (double)((double)adcVRef / pow(2, 31));
-
-// HSFPAR303A force sensor
-/*
-Pin 1 vdd
-pin 2 v1 Out + -> AIN0
-pin 3 v2 Out - -> AIN1
-pin 4 gnd
-*/
-
-const float cellSensitivity = 3.7;
-const float cellMaxLoad = 8.0;
-const float cellFsr = cellSensitivity * adcVRef;
-
-const double adcResolution = (double)((double)adcFsr / (double)(pow(2, 31)));
-
-volatile int i;
-volatile char SPI_RX_Buff[10];
-volatile long ads1262_rx_Data[10];
-volatile static int SPI_RX_Buff_Count = 0;
-volatile char *SPI_RX_Buff_Ptr;
-volatile int Responsebyte = false;
-volatile signed long sads1262Count = 0;
-volatile signed long uads1262Count = 0;
-
-signed long int adcOffset = 0;
-
-// float readADC(byte inpsel);
+ADS126X adc;              // start the class
+const int adcAin0Pin = 0; // ADS126X pin AIN0, positive input
+const int adcAin1Pin = 1; // ADS126X pin AIN1, egative input
 
 /** 
  * Pins 
@@ -84,29 +48,50 @@ signed long int adcOffset = 0;
  * see: https://circuits4you.com/2018/12/31/esp32-wroom32-devkit-analog-read-example/)
  */
 
-// I2C bus
-// SDA / SCL Require Pull-up resistors to VDD
-// Typical pullup value is 4.7k for 5V
-// note that the 5V <-> 3.3v level shifter has 10K pull-up resistor installed
-// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/i2c.html
-// https://learn.sparkfun.com/tutorials/bi-directional-logic-level-converter-hookup-guide
-// https://www.arduino.cc/en/reference/wire
-
-// const unsigned char i2cSda = 23; // i2c data line
-// const unsigned char i2cScl = 22; // i2c clock line
-
 /**
  * SPI - ESP32-devkit-c standard outputs for VSPI
- * SPID = MOSI = data out - VSPI uses GPIO23
- * SPIQ = MISO = data in - VSPI uses GPIO19
- * VSPIWP = START VSPI uses GPIO22
- * CK = CLK - VSPI uses GPIO18
- * CS = VSPICSO uses GPIO5
+ * ESP32    ADS1262           ESP32 VSPI Std Pin
+ * ==============================================
+ * SPID =   MOSI = data out - VSPI uses GPIO23
+ * SPIQ =   MISO = data in  - VSPI uses GPIO19
+ * VSPIWP = START           - VSPI uses GPIO22
+ * CK =     CLK             - VSPI uses GPIO18
+ * CS =     VSPICSO         - VSPI uses GPIO5
  */
+const int spiCs = 5;           // SPI CS pin
+const int spiStart = 22;       // SPI Start pin
+const int esp32AdcRdyPin = 17; // ADS126X RDY pin (14) -> ESP32 io pin (active low)
+
+// Reference Voltage
+const float adcVRef = 5.08;
+// Gain
+const float adcPga = 32.0;
+// ADC fullscale range
+const double adcFsr = (double)((double)adcVRef / (double)adcPga);
+
 /**
- * I2C Globals
- */
-// TwoWire I2C = TwoWire(0);
+* HSFPAR303A force sensor 
+* Pin 1 vdd Exc + -> ADC AIN4 (REF+)
+* pin 2 v1  Out + -> ADC AIN0
+* pin 3 v2  Out - -> ADC AIN1
+* pin 4 gnd Exc - -> AD AIN5 (REF-)
+*/
+
+const float numberOfCells = 4.0;
+const float cellSensitivity = 3.7;
+const float cellMaxLoad = 8.0;
+const float totalMaxLoad = cellMaxLoad * numberOfCells;
+const float cellFsr = cellSensitivity * adcVRef * adcPga;
+
+float lastGrams = 0;
+float grams = 0;
+Smoothed<float> voltageSmoother;
+
+const double adcResolution = (double)((double)adcFsr / (double)(pow(2, 31)));
+
+signed long int adcOffset = 0;
+
+// float readADC(byte inpsel);
 
 /**
  * Bluetooth Globals
@@ -141,34 +126,45 @@ class PressureSensorBLECharCallbacks : public BLECharacteristicCallbacks
   void onRead(BLECharacteristic *pCharacteristic)
   {
   }
-  // void onWrite(BLECharacteristic *pCharacteristic)
-  // {
-  //   std::string value = pCharacteristic->getValue();
-
-  //   if (value.length() > 0)
-  //   {
-  //     Serial.print("received value: ");
-  //     for (int i = 0; i < value.length(); i++)
-  //       Serial.print(value[i]);
-
-  //     Serial.println();
-  //   }
-  // pCharacteristic->setValue("received " + value);
-  //}
 };
 
 void bleNotifyTask(void *params)
 {
   for (;;)
   {
-    // if (blePressureSensorNotifyFlag)
-    // {
-    //   pPressureSensorBLEChar->notify();
-    //   blePressureSensorNotifyFlag = false;
-    // }
-
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
+}
+
+/**
+ * Setup ADC registers for internal temperature reading
+ */
+void setupAdcTemperatureRead()
+{
+  // prepare registers to read temperature - see data sheet 9.3.4
+  // disale chop mode
+  adc.setChopMode(ADS126X_CHOP_0);
+  // set gain to 1
+  adc.setGain(ADS126X_GAIN_1);
+}
+
+float readAdcTemperature()
+{
+  signed long int outputCode = adc.readADC1(ADS126X_TEMP, ADS126X_TEMP);
+  delay(250);
+  outputCode = adc.readADC1(ADS126X_TEMP, ADS126X_TEMP);
+  // convert to celsius - see data sheet 9.3.4 (Equation 9)
+  float celsius = (float)((double)(outputCode - 122400.0) / 420.0) + 25.0;
+  Serial.println("C: " + String(celsius, 4) + " raw: " + String(outputCode));
+
+  return celsius;
+}
+
+void setupAdcLoadCellRead()
+{
+  adc.enableStatus();
+  adc.setChopMode(ADS126X_CHOP_1);
+  adc.setGain(ADS126X_GAIN_32);
 }
 
 /**
@@ -192,19 +188,6 @@ void setup()
   Serial.println("BLE Service Initialized");
   pServer->setCallbacks(new ComGndServerCallbacks());
   Serial.println("BLE Server Callback Initialized");
-
-  // https://www.arduino.cc/en/Reference/ArduinoBLEBLECharacteristicBLECharacteristic
-  // pPressureSensorBLEChar = pService->createCharacteristic(
-  //     PRESSURE_SENSOR_CHAR_ID,
-  //     BLECharacteristic::PROPERTY_READ |
-  //         BLECharacteristic::PROPERTY_WRITE |
-  //         BLECharacteristic::PROPERTY_NOTIFY |
-  //         BLECharacteristic::PROPERTY_INDICATE);
-  // Serial.println("BLE Pressure Sensor Characteristic Created");
-  // // pPressureSensorBLEChar->setCallbacks(new PressureSensorBLECharCallbacks());
-  // Serial.println("BLE Pressure Sensor Characteristic Callback Initialized");
-  // pPressureSensorBLEChar->addDescriptor(new BLE2902());
-
   pService->start();
 
   Serial.println("BLE Service Started");
@@ -236,22 +219,38 @@ void setup()
   // digitalWrite(16, HIGH);
   // digitalWrite(8, LOW);
 
-  adc.begin(chip_select);
-  adc.setStartPin(22);
+  pinMode(esp32AdcRdyPin, INPUT_PULLUP); // adc data ready (DRDY) pin (active low)
+
+  voltageSmoother.begin(SMOOTHED_EXPONENTIAL, 50);
+
+  adc.begin(spiCs);
+  adc.setStartPin(spiStart);
+
+  // Internal 2.5 V is needed for internal temp sensor and to calibrate the external ref.
+  adc.enableInternalReference();
 
   // We use the excitation voltage as the reference for Ratiometric Measurement
   // GNDA is connected to AIN5, +5A is connected to AIN4
   adc.setReference(ADS126X_REF_NEG_AIN5, ADS126X_REF_POS_AIN4);
   adc.setContinuousMode();
-  // // Set Sample Rate to 100 SPS
-
-  // // adc.setRate(ADS126X_RATE_20);
-  // // adc.setFilter(ADS126X_FIR);
+  adc.enableStatus();
+  // // Set Sample Rate to 60 SPS
+  adc.setRate(ADS126X_RATE_60);
+  adc.setFilter(ADS126X_SINC4);
+  // adc.setRate(ADS126X_RATE_20);
+  // adc.setFilter(ADS126X_FIR);
   // // Enable Chop mode - note: chop mode disables offset callibration registers (SFOCAL1 and SYOCAL1)
+  uint8_t chopRegBefore = adc.readRegister(ADS126X_MODE0);
   adc.setChopMode(ADS126X_CHOP_1);
+  uint8_t chopRegAfter = adc.readRegister(ADS126X_MODE0);
+  Serial.print("chop: ");
+  Serial.print(chopRegBefore, BIN);
+  Serial.print(" -> ");
+  Serial.print(chopRegAfter, BIN);
+  Serial.println("");
 
   uint8_t gainRegBefore = adc.readRegister(ADS126X_MODE2);
-  // adc.setGain(ADS126X_GAIN_32);
+  adc.setGain(ADS126X_GAIN_32);
   uint8_t gainRegAfter = adc.readRegister(ADS126X_MODE2);
   Serial.print("gain: ");
   Serial.print(gainRegBefore, BIN);
@@ -261,12 +260,21 @@ void setup()
   adc.enablePGA();
   adc.startADC1();
 
+  setupAdcTemperatureRead();
   delay(500);
+  float celsius = readAdcTemperature();
+  delay(250);
+  setupAdcLoadCellRead();
+  delay(250);
+  adc.readADC1(adcAin0Pin, adcAin1Pin);
+  delay(250);
+  adc.readADC1(adcAin0Pin, adcAin1Pin);
+  delay(2000);
   // tare
-  signed long int offsetTotal = 0;
+  double offsetTotal = 0;
   for (uint8_t i = 0; i < 10; i++)
   {
-    offsetTotal += adc.readADC1(pos_pin, neg_pin); // read the voltage
+    offsetTotal += adc.readADC1(adcAin0Pin, adcAin1Pin); // read the voltage
     Serial.println(" Offset total: " + String(offsetTotal));
 
     delay(100);
@@ -274,12 +282,13 @@ void setup()
 
   adcOffset = (double)round(offsetTotal / 10);
 
-  adc.setRate(ADS126X_RATE_60);
-  adc.setFilter(ADS126X_SINC3);
+  // adc.setRate(ADS126X_RATE_60);
+  // adc.setFilter(ADS126X_SINC3);
 
+  Serial.println("Temp C: " + String(celsius));
   Serial.println("ADC Res: " + String(adcResolution, 6));
 
-  Serial.println("ADC Offset: " + String(adcOffset) + " Offset total: " + String(offsetTotal));
+  Serial.println("ADC Offset: " + String((float)(adcOffset * adcResolution)) + " raw: " + String(adcOffset) + " Offset total: " + String(offsetTotal));
   //xTaskCreate(bleNotifyTask, "bleNotify", 5000, NULL, 1, NULL);
 }
 
@@ -288,36 +297,32 @@ void setup()
  */
 void loop()
 {
-  // float pwr;
-  // byte channel;
-  // channel = 1;
-  // //pwr=abs(readADC(0x0a+channel*16));
-  // pwr = readADC(0 + channel * 16);
-  // Serial.print("Data: ");
-  // Serial.printf("%0.6f", pwr);
-  // Serial.println(" mV");
-  // delay(200);
+  signed long int outputCode = 0;
+  const int samples = 1;
 
-  signed long int outputCode = adc.readADC1(pos_pin, neg_pin); // read the voltage
-  outputCode -= adcOffset;
+  const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
+  float voltage = 0.0;
+  float newtons = 0.0;
 
-  // fullscale voltage =
-  float voltage = (float)((adcResolution)*outputCode);
-  // float volt_mV = (float)(volt_V * 1000.0); // voltage in mV
-  // double voltage = (double)(outputCode * (adcVRef / adcPga * exp2(31)));
-  float newtonsPerMv = cellFsr / cellMaxLoad;
-  float newtons = voltage * 1000.0 * newtonsPerMv;
-  // float vNewtons = voltage * cellMaxLoad;
-  // float newtons = vNewtons / (cellSensitivity * adcFsr);
-  // float mvPerNewton = 18.5 / 8.0;
-  // float percent = (float)(volt_mV / 592.0);
-  // float newtons = volt_V * 3.7;
-  float grams = newtons * 101.97162;
-  //Serial.println(newtons);
-  Serial.print("g: " + String(grams, 6) + " n: " + String(newtons, 6) + " v:" + String(voltage, 16) + " FSR: " + String(adcFsr, 6) + " raw: " + String(outputCode) + " b: "); // send voltage through serial
-  Serial.println(outputCode, BIN);
-  // long voltage = outputCode * LSb_size;
-  //Serial.printf("%0.6f", (double)voltage);
-  // Serial.println("");
-  delay(100);
+  // wait for Data Ready Pin to go low
+  // if (digitalRead(esp32AdcRdyPin) == LOW)
+
+  outputCode = adc.readADC1(adcAin0Pin, adcAin1Pin); // read the voltage
+  // lastADC1Status returns 1 if reading has returned new data (see data sheet 9.4.6)
+  if (adc.lastADC1Status())
+  {
+
+    outputCode -= adcOffset;
+
+    voltage = (float)((adcResolution)*outputCode);
+
+    voltageSmoother.add(voltage);
+    float smoothVoltage = voltageSmoother.get();
+
+    newtons = smoothVoltage * newtonsPerMv;
+    grams = newtons * 101.97162;
+
+    Serial.print("g: " + String(grams, 2) + " n: " + String(newtons, 6) + " v:" + String(smoothVoltage, 16) + " FSR: " + String(adcFsr, 6) + " raw: " + String(outputCode) + " b: "); // send voltage through serial
+    Serial.println(outputCode, BIN);
+  }
 }
