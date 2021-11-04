@@ -221,7 +221,7 @@ void setup()
 
   pinMode(esp32AdcRdyPin, INPUT_PULLUP); // adc data ready (DRDY) pin (active low)
 
-  voltageSmoother.begin(SMOOTHED_EXPONENTIAL, 50);
+  voltageSmoother.begin(SMOOTHED_EXPONENTIAL, 80);
 
   adc.begin(spiCs);
   adc.setStartPin(spiStart);
@@ -300,7 +300,12 @@ void loop()
   signed long int outputCode = 0;
   const int samples = 1;
 
-  const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
+  // const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
+  // ideal newtons per mv is 952 per cell (based on data sheet).
+  // that can be divided by the number of cells to get the ideal conversion.
+
+  const float vAt10g = 0.0004182; // the voltage reading at 10g (excluding the offset)
+  const float newtonsPerMv = .0980665 / vAt10g;
   float voltage = 0.0;
   float newtons = 0.0;
 
@@ -312,7 +317,7 @@ void loop()
   if (adc.lastADC1Status())
   {
 
-    outputCode -= adcOffset;
+    //outputCode -= adcOffset;
 
     voltage = (float)((adcResolution)*outputCode);
 
