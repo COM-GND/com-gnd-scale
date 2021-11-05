@@ -8,6 +8,8 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <ADS126X.h>
+#include <definitions/ADS126X_hardware.h> // board specific commands
+
 #include <Smoothed.h>
 
 // https://btprodspecificationrefs.blob.core.windows.net/assigned-values/16-bit%20UUID%20Numbers%20Document.pdf
@@ -39,8 +41,10 @@
 
 // ads1262 PC_ADS1262; // class
 ADS126X adc;              // start the class
-const int adcAin0Pin = 0; // ADS126X pin AIN0, positive input
-const int adcAin1Pin = 1; // ADS126X pin AIN1, egative input
+const int adcAin2Pin = 2; // ADS126X pin AIN2, positive input
+const int adcAin3Pin = 3; // ADS126X pin AIN3, negative input
+const int adcAin4Pin = 4; // ADS126X pin AIN4, positive input
+const int adcAin5Pin = 5; // ADS126X pin AIN5, negative input
 
 /** 
  * Pins 
@@ -77,7 +81,7 @@ const double adcFsr = (double)((double)adcVRef / (double)adcPga);
 * pin 4 gnd Exc - -> AD AIN5 (REF-)
 */
 
-const float numberOfCells = 4.0;
+const float numberOfCells = 1.0; // number of load cells wired in parallel per adc channel
 const float cellSensitivity = 3.7;
 const float cellMaxLoad = 8.0;
 const float totalMaxLoad = cellMaxLoad * numberOfCells;
@@ -224,18 +228,18 @@ void setup()
   voltageSmoother.begin(SMOOTHED_EXPONENTIAL, 80);
 
   adc.begin(spiCs);
-  adc.setStartPin(spiStart);
+  // adc.setStartPin(spiStart);
 
   // Internal 2.5 V is needed for internal temp sensor and to calibrate the external ref.
   adc.enableInternalReference();
 
   // We use the excitation voltage as the reference for Ratiometric Measurement
   // GNDA is connected to AIN5, +5A is connected to AIN4
-  adc.setReference(ADS126X_REF_NEG_AIN5, ADS126X_REF_POS_AIN4);
+  adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
   adc.setContinuousMode();
-  adc.enableStatus();
+  // adc.enableStatus();
   // // Set Sample Rate to 60 SPS
-  adc.setRate(ADS126X_RATE_60);
+  adc.setRate(ADS126X_RATE_400);
   adc.setFilter(ADS126X_SINC4);
   // adc.setRate(ADS126X_RATE_20);
   // adc.setFilter(ADS126X_FIR);
@@ -266,15 +270,15 @@ void setup()
   delay(250);
   setupAdcLoadCellRead();
   delay(250);
-  adc.readADC1(adcAin0Pin, adcAin1Pin);
+  adc.readADC1(adcAin2Pin, adcAin3Pin);
   delay(250);
-  adc.readADC1(adcAin0Pin, adcAin1Pin);
+  adc.readADC1(adcAin2Pin, adcAin3Pin);
   delay(2000);
   // tare
   double offsetTotal = 0;
   for (uint8_t i = 0; i < 10; i++)
   {
-    offsetTotal += adc.readADC1(adcAin0Pin, adcAin1Pin); // read the voltage
+    offsetTotal += adc.readADC1(adcAin2Pin, adcAin3Pin); // read the voltage
     Serial.println(" Offset total: " + String(offsetTotal));
 
     delay(100);
@@ -292,6 +296,78 @@ void setup()
   //xTaskCreate(bleNotifyTask, "bleNotify", 5000, NULL, 1, NULL);
 }
 
+int32_t readAdcRaw(uint8_t pos_pin, uint8_t neg_pin)
+{
+
+  // create buffer to hold transmission
+  uint8_t buff[10] = {0}; // plenty of room, all zeros
+
+  union
+  { // create a structure to hold all the data
+    struct
+    {
+      uint32_t DATA4 : 8; // bits 0.. 7
+      uint32_t DATA3 : 8; // bits 8.. 15
+      uint32_t DATA2 : 8; // bits 16.. 23
+      uint32_t DATA1 : 8; // bits 24.. 31
+    } bit;
+    uint32_t reg;
+  } ADC_BYTES;
+
+  // check if desired pins are different than old pins
+
+  adc.REGISTER.INPMUX.bit.MUXN = neg_pin;
+  adc.REGISTER.INPMUX.bit.MUXP = pos_pin;
+  adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
+  while (digitalRead(esp32AdcRdyPin) == HIGH)
+  {
+    // wait
+  }
+
+  uint8_t i = 0;            // current place in outgoing buffer
+  buff[i] = ADS126X_RDATA1; // the read adc1 command
+  i++;
+
+  _ads126x_spi_rw(buff, i); // write spi, save values on buff
+
+  uint8_t j = 1; // start at byte 1, either status or first adc value
+
+  // save the data bytes
+  ADC_BYTES.bit.DATA1 = buff[j];
+  j++;
+  ADC_BYTES.bit.DATA2 = buff[j];
+  j++;
+  ADC_BYTES.bit.DATA3 = buff[j];
+  j++;
+  ADC_BYTES.bit.DATA4 = buff[j];
+  j++;
+
+  return ADC_BYTES.reg;
+}
+
+float readAdcV(int ainPos, int ainNeg)
+{
+
+  adc.REGISTER.INPMUX.bit.MUXN = ainNeg;
+  adc.REGISTER.INPMUX.bit.MUXP = ainPos;
+  adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
+
+  adc.startADC1();
+  while (digitalRead(esp32AdcRdyPin) == HIGH)
+  {
+    // wait
+  }
+  adc.stopADC1();
+  signed long int outputCode = 0;
+  // while (outputCode == 0 || outputCode == -1)
+  // {
+  outputCode = adc.readADC1(ainPos, ainNeg); // read the voltage
+  //}
+  float voltage = (float)((adcResolution) * (double)(outputCode));
+  Serial.print(" outputCode: " + String(outputCode));
+
+  return voltage;
+}
 /**
  * Main Loop
  */
@@ -309,25 +385,29 @@ void loop()
   float voltage = 0.0;
   float newtons = 0.0;
 
+  float cell0V = readAdcV(adcAin2Pin, adcAin3Pin);
+  float cell1V = readAdcV(adcAin4Pin, adcAin5Pin);
+  Serial.println("cell0: " + String(cell0V, 5) + " cell1: " + String(cell1V, 5));
+
   // wait for Data Ready Pin to go low
   // if (digitalRead(esp32AdcRdyPin) == LOW)
 
-  outputCode = adc.readADC1(adcAin0Pin, adcAin1Pin); // read the voltage
-  // lastADC1Status returns 1 if reading has returned new data (see data sheet 9.4.6)
-  if (adc.lastADC1Status())
-  {
+  // outputCode = adc.readADC1(adcAin2Pin, adcAin3Pin); // read the voltage
+  // // lastADC1Status returns 1 if reading has returned new data (see data sheet 9.4.6)
+  // if (adc.lastADC1Status())
+  // {
 
-    //outputCode -= adcOffset;
+  //   //outputCode -= adcOffset;
 
-    voltage = (float)((adcResolution)*outputCode);
+  //   voltage = (float)((adcResolution)*outputCode);
 
-    voltageSmoother.add(voltage);
-    float smoothVoltage = voltageSmoother.get();
+  //   voltageSmoother.add(voltage);
+  //   float smoothVoltage = voltageSmoother.get();
 
-    newtons = smoothVoltage * newtonsPerMv;
-    grams = newtons * 101.97162;
+  //   newtons = smoothVoltage * newtonsPerMv;
+  //   grams = newtons * 101.97162;
 
-    Serial.print("g: " + String(grams, 2) + " n: " + String(newtons, 6) + " v:" + String(smoothVoltage, 16) + " FSR: " + String(adcFsr, 6) + " raw: " + String(outputCode) + " b: "); // send voltage through serial
-    Serial.println(outputCode, BIN);
-  }
+  //   Serial.print("g: " + String(grams, 2) + " n: " + String(newtons, 6) + " v:" + String(smoothVoltage, 16) + " raw: " + String(outputCode) + " b: "); // send voltage through serial
+  //   Serial.println(outputCode, BIN);
+  // }
 }
