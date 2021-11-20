@@ -8,12 +8,16 @@ Scale::Scale()
     // spiStartPin = _spiStartPin;
     loadCells[0].posPin = cell0AdcPosPin;
     loadCells[0].negPin = cell0AdcNegPin;
+    loadCells[0].nPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
     loadCells[1].posPin = cell1AdcPosPin;
     loadCells[1].negPin = cell1AdcNegPin;
+    loadCells[1].nPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
     loadCells[2].posPin = cell2AdcPosPin;
     loadCells[2].negPin = cell2AdcNegPin;
+    loadCells[2].nPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
     loadCells[3].posPin = cell3AdcPosPin;
     loadCells[3].negPin = cell3AdcNegPin;
+    loadCells[3].nPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
 }
 
 Scale::~Scale()
@@ -52,9 +56,10 @@ float Scale::readGrams()
         avgG += loadCells[i].g;
     }
 
-    // avgG /= 4;
+    // the weight is the average of the 4 cells.
+    avgG /= 4.0;
 
-    Serial.println("g: " + String(loadCells[0].g, 6) + " , " + String(loadCells[1].g, 6) + " , " + String(loadCells[2].g, 6) + " , " + String(loadCells[3].g, 6));
+    Serial.println("g: " + String(avgG) + " : " + String(loadCells[0].g, 6) + " , " + String(loadCells[1].g, 6) + " , " + String(loadCells[2].g, 6) + " , " + String(loadCells[3].g, 6));
 
     return avgG;
 }
@@ -92,7 +97,48 @@ float Scale::readAdcV(int ainPos, int ainNeg)
     return voltage;
 }
 
-float Scale::tareCell(loadCell *loadCellData)
+void Scale::calCells()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        calCell(&loadCells[i]);
+    }
+}
+
+void Scale::calCell(loadCell *loadCellData)
+{
+    Serial.println(" Calibrating cell on pins: pos " + String(loadCellData->posPin) + ", neg " + String(loadCellData->negPin));
+    adc.stopADC1();
+    adc.setRate(ADS126X_RATE_2_5);
+    double vTotal = 0;
+    for (uint8_t i = 0; i < 2; i++)
+    {
+        float v = readAdcV(loadCellData->posPin, loadCellData->negPin); // read the voltage
+        vTotal += v;
+        Serial.println(" v: " + String(v, 6));
+    }
+    // this is max v using a 100g reference weight
+    loadCellData->ref100gVMax = (float)(vTotal / 2.0) - loadCellData->vOffset;
+
+    float mVPerG = 100.0 / loadCellData->ref100gVMax;
+    // 100g in newtons = 100 * nPerG = .980665
+    float mvPerN = (100.0 * nPerG) / loadCellData->ref100gVMax;
+    // find the newtonsPerMv
+    // 100g = 100.0 / 101.97162 newtons
+
+    loadCellData->nPerMv = mvPerN;
+
+    Serial.println(" v avg: " +
+                   String(loadCellData->ref100gVMax, 6) +
+                   " mVPerG: " + String(mVPerG, 6) +
+                   " mvPerN: " + String(mvPerN, 6) +
+                   " nPerMv: " + String(loadCellData->nPerMv, 6));
+
+    adc.stopADC1();
+    adc.setRate(ADS126X_RATE_400);
+}
+
+void Scale::tareCell(loadCell *loadCellData)
 {
     adc.stopADC1();
     adc.setRate(ADS126X_RATE_2_5);
@@ -109,15 +155,16 @@ float Scale::tareCell(loadCell *loadCellData)
 
 float Scale::vToN(float volts, loadCell loadCellData)
 {
+    // 57.128
     const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
     // TODO use a calibrated conversion factor;
-    float newtons = (volts - loadCellData.vOffset) * newtonsPerMv;
+    float newtons = (volts - loadCellData.vOffset) * loadCellData.nPerMv;
     return newtons;
 }
 
 float Scale::vToG(float volts, loadCell cellConfig)
 {
     float newtons = vToN(volts, cellConfig);
-    float grams = newtons * 101.97162;
+    float grams = newtons * gPerN;
     return grams;
 }

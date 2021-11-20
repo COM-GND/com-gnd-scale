@@ -32,6 +32,9 @@ public:
     // ADC fullscale range
     double adcFsr = (double)((double)adcVRef / (double)adcPga);
 
+    const float gPerN = 101.97162;
+    const float nPerG = 1.0 / gPerN;
+    // const float g100InN =
     /**
     * HSFPAR303A force sensor 
     * Pin 1 vdd Exc + -> ADC AIN4 (REF+)
@@ -62,14 +65,15 @@ public:
 
     struct loadCell
     {
-        int posPin;
-        int negPin;
-        float vOffset;
-        float nPerMv;
-        double raw;
-        float v;
-        float g;
-        float n;
+        int posPin;        // the cell's positive V pin number
+        int negPin;        // the cell's negative V pin number
+        float vOffset;     // the 0g offset volate
+        float ref100gVMax; // the max V when calibrating with 100g reference weight
+        float nPerMv;      // the calibrated newtons per mV
+        double raw;        // the raw adc value
+        float v;           // voltage
+        float g;           // grams
+        float n;           // newtons
     };
     const float defaultNPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
 
@@ -81,7 +85,9 @@ public:
     float readGrams();
     void updateLoadCellData(loadCell &loadCellData);
     float readAdcV(int, int);
-    float tareCell(loadCell *loadCellData);
+    void tareCell(loadCell *loadCellData);
+    void calCell(loadCell *loadCellData);
+    void calCells();
     float vToN(float volts, loadCell loadCellData);
     float vToG(float volts, loadCell loadCellData);
 };

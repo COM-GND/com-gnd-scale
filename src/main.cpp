@@ -358,6 +358,23 @@ void setup()
 //   float grams = newtons * 101.97162;
 //   return grams;
 // }
+
+void handleCli()
+{
+  if (Serial.available())
+  {
+    char input = Serial.read();
+    if (input == 'c')
+    {
+      Serial.println("Start Calibration");
+
+      comGndScale.calCells();
+
+      Serial.println("End Calibration");
+    }
+  }
+}
+
 /**
  * Main Loop
  */
@@ -369,6 +386,8 @@ void loop()
   // const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
 
   float weightG = comGndScale.readGrams();
+
+  handleCli();
 
   // ideal newtons per mv is 952 per cell (based on data sheet).
   // that can be divided by the number of cells to get the ideal conversion.
