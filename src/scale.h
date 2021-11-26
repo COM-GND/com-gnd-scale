@@ -69,6 +69,7 @@ public:
         int negPin;        // the cell's negative V pin number
         float vOffset;     // the 0g offset volate
         float ref100gVMax; // the max V when calibrating with 100g reference weight
+        float ref100gVMin; // the max V when calibrating with 100g reference weight
         float nPerMv;      // the calibrated newtons per mV
         double raw;        // the raw adc value
         float v;           // voltage
@@ -86,6 +87,7 @@ public:
     void updateLoadCellData(loadCell &loadCellData);
     float readAdcV(int, int);
     void tareCell(loadCell *loadCellData);
+    void resetCellsCal(); // clear calibration values
     void calCell(loadCell *loadCellData);
     void calCells();
     float vToN(float volts, loadCell loadCellData);

@@ -41,12 +41,13 @@ void Scale::begin()
     tareCell(&loadCells[2]);
     tareCell(&loadCells[3]);
     Serial.println("Offsets: " + String(loadCells[0].vOffset) + " , " + String(loadCells[1].vOffset) + " , " + String(loadCells[2].vOffset) + " , " + String(loadCells[3].vOffset));
-    adc.setRate(ADS126X_RATE_400);
+    adc.setRate(ADS126X_RATE_2400);
 }
 
 float Scale::readGrams()
 {
     float avgG = 0;
+    unsigned long readStartTimestamp = millis();
     for (int i = 0; i < 4; i++)
     {
         updateLoadCellData(loadCells[i]);
@@ -59,7 +60,15 @@ float Scale::readGrams()
     // the weight is the average of the 4 cells.
     avgG /= 4.0;
 
-    Serial.println("g: " + String(avgG) + " : " + String(loadCells[0].g, 6) + " , " + String(loadCells[1].g, 6) + " , " + String(loadCells[2].g, 6) + " , " + String(loadCells[3].g, 6));
+    unsigned long readEndTimestamp = millis();
+    unsigned long readTime = readEndTimestamp - readStartTimestamp;
+
+    Serial.println("t: " + String(readTime) +
+                   " g: " + String(avgG) +
+                   " : " + String(loadCells[0].g, 6) +
+                   " , " + String(loadCells[1].g, 6) +
+                   " , " + String(loadCells[2].g, 6) +
+                   " , " + String(loadCells[3].g, 6));
 
     return avgG;
 }
@@ -76,27 +85,38 @@ void Scale::updateLoadCellData(loadCell &loadCellData)
 
 float Scale::readAdcV(int ainPos, int ainNeg)
 {
-
+    uint8_t samples = 4;
     adc.REGISTER.INPMUX.bit.MUXN = ainNeg;
     adc.REGISTER.INPMUX.bit.MUXP = ainPos;
     adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
-
-    adc.startADC1();
-    while (digitalRead(rdryPin) == HIGH)
-    {
-        // wait
-    }
-    adc.stopADC1();
     signed long int outputCode = 0;
+    adc.startADC1();
+    for (int i = 0; i < samples; i++)
+    {
+        while (digitalRead(rdryPin) == HIGH)
+        {
+            // wait
+        }
+        outputCode += adc.readADC1(ainPos, ainNeg); // read the voltage
+    }
 
-    outputCode = adc.readADC1(ainPos, ainNeg); // read the voltage
+    adc.stopADC1();
 
+    outputCode = (long int)(round((float)(outputCode) / (float)samples));
     float voltage = (float)((adcResolution) * (double)(outputCode));
     // Serial.print(" outputCode: " + String(outputCode));
 
     return voltage;
 }
 
+void Scale::resetCellsCal()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        loadCells[i].ref100gVMax = 0;
+        loadCells[i].ref100gVMin = 0;
+    }
+}
 void Scale::calCells()
 {
     for (int i = 0; i < 4; i++)
@@ -105,6 +125,12 @@ void Scale::calCells()
     }
 }
 
+/**
+ * Each cell requires calibration. The 100g reference Reading of each cell changes
+ * according to the position of the weight relative to the cell. Multiple
+ * readings at different weight positions are needed to try to capture the absolute
+ * max and min ref values. 
+ */
 void Scale::calCell(loadCell *loadCellData)
 {
     Serial.println(" Calibrating cell on pins: pos " + String(loadCellData->posPin) + ", neg " + String(loadCellData->negPin));
@@ -117,8 +143,21 @@ void Scale::calCell(loadCell *loadCellData)
         vTotal += v;
         Serial.println(" v: " + String(v, 6));
     }
-    // this is max v using a 100g reference weight
-    loadCellData->ref100gVMax = (float)(vTotal / 2.0) - loadCellData->vOffset;
+
+    // this is the v using a 100g reference weight
+    float ref100g = (float)(vTotal / 2.0) - loadCellData->vOffset;
+
+    // update cells ref 100 max reading
+    if (ref100g > loadCellData->ref100gVMax)
+    {
+        loadCellData->ref100gVMax = ref100g;
+    }
+
+    // update cells ref 100 min reading
+    if (loadCellData->ref100gVMin == 0 || ref100g < loadCellData->ref100gVMin)
+    {
+        loadCellData->ref100gVMin = ref100g;
+    }
 
     float mVPerG = 100.0 / loadCellData->ref100gVMax;
     // 100g in newtons = 100 * nPerG = .980665
@@ -135,7 +174,7 @@ void Scale::calCell(loadCell *loadCellData)
                    " nPerMv: " + String(loadCellData->nPerMv, 6));
 
     adc.stopADC1();
-    adc.setRate(ADS126X_RATE_400);
+    adc.setRate(ADS126X_RATE_2400);
 }
 
 void Scale::tareCell(loadCell *loadCellData)
@@ -143,13 +182,15 @@ void Scale::tareCell(loadCell *loadCellData)
     adc.stopADC1();
     adc.setRate(ADS126X_RATE_2_5);
     double offsetTotal = 0;
-    for (uint8_t i = 0; i < 2; i++)
+    uint8_t samples = 1;
+
+    for (uint8_t i = 0; i < samples; i++)
     {
         float offset = readAdcV(loadCellData->posPin, loadCellData->negPin); // read the voltage
         offsetTotal += offset;
         Serial.println(" Offset: " + String(offset, 6));
     }
-    loadCellData->vOffset = (float)(offsetTotal / 2.0);
+    loadCellData->vOffset = (float)(offsetTotal / (float)samples);
     Serial.println(" Offset avg: " + String(loadCellData->vOffset, 6));
 }
 

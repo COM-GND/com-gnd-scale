@@ -364,6 +364,14 @@ void handleCli()
   if (Serial.available())
   {
     char input = Serial.read();
+    if (input == 'r')
+    {
+      Serial.println("Reseting Calibration");
+      comGndScale.resetCellsCal();
+      Serial.println("End Reseting Calibration");
+    }
+    // Calibrate several times with the weight at each corner to try and
+    // find the max and min values for each cell.
     if (input == 'c')
     {
       Serial.println("Start Calibration");
@@ -385,6 +393,7 @@ void loop()
 
   // const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
 
+  
   float weightG = comGndScale.readGrams();
 
   handleCli();
