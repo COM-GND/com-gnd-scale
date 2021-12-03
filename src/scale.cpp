@@ -31,7 +31,7 @@ void Scale::begin()
     adc.enableInternalReference();
     adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
     adc.setContinuousMode();
-    adc.setFilter(ADS126X_SINC4);
+    adc.setFilter(ADS126X_SINC1);
     adc.setChopMode(ADS126X_CHOP_1);
     adc.setGain(ADS126X_GAIN_32);
     adc.enablePGA();
@@ -40,8 +40,13 @@ void Scale::begin()
     tareCell(&loadCells[1]);
     tareCell(&loadCells[2]);
     tareCell(&loadCells[3]);
-    Serial.println("Offsets: " + String(loadCells[0].vOffset) + " , " + String(loadCells[1].vOffset) + " , " + String(loadCells[2].vOffset) + " , " + String(loadCells[3].vOffset));
-    adc.setRate(ADS126X_RATE_2400);
+    Serial.println(
+        "Offsets: " + String(loadCells[0].vOffset) +
+        " , " + String(loadCells[1].vOffset) +
+        " , " + String(loadCells[2].vOffset) +
+        " , " + String(loadCells[3].vOffset));
+    adc.setRate(ADS126X_RATE_400);
+    gramsSmoother.begin(SMOOTHED_AVERAGE, 10);
 }
 
 float Scale::readGrams()
@@ -50,7 +55,7 @@ float Scale::readGrams()
     unsigned long readStartTimestamp = millis();
     for (int i = 0; i < 4; i++)
     {
-        updateLoadCellData(loadCells[i]);
+        updateLoadCellData(loadCells[i], 2);
     }
     for (int i = 0; i < 4; i++)
     {
@@ -63,8 +68,18 @@ float Scale::readGrams()
     unsigned long readEndTimestamp = millis();
     unsigned long readTime = readEndTimestamp - readStartTimestamp;
 
+    // estimate SNR
+    gramsSmoother.add(avgG);
+    float smoothedG = gramsSmoother.get();
+    float noise = abs(smoothedG - avgG);
+    float snr = log10f(avgG) - log10f(noise);
+
     Serial.println("t: " + String(readTime) +
+                   " sps " + String(1000.0 / readTime) +
                    " g: " + String(avgG) +
+                   " avg: " + String(smoothedG) +
+                   " noise: " + String(noise, 4) +
+                   " snr: " + String(snr, 4) +
                    " : " + String(loadCells[0].g, 6) +
                    " , " + String(loadCells[1].g, 6) +
                    " , " + String(loadCells[2].g, 6) +
@@ -73,9 +88,9 @@ float Scale::readGrams()
     return avgG;
 }
 
-void Scale::updateLoadCellData(loadCell &loadCellData)
+void Scale::updateLoadCellData(loadCell &loadCellData, uint8_t samples = 1)
 {
-    float v = readAdcV(loadCellData.posPin, loadCellData.negPin);
+    float v = readAdcV(loadCellData.posPin, loadCellData.negPin, samples);
     float g = vToG(v, loadCellData);
     float n = vToN(v, loadCellData);
     loadCellData.v = v;
@@ -83,9 +98,8 @@ void Scale::updateLoadCellData(loadCell &loadCellData)
     loadCellData.n = n;
 }
 
-float Scale::readAdcV(int ainPos, int ainNeg)
+float Scale::readAdcV(uint8_t ainPos, uint8_t ainNeg, uint8_t samples = 1)
 {
-    uint8_t samples = 4;
     adc.REGISTER.INPMUX.bit.MUXN = ainNeg;
     adc.REGISTER.INPMUX.bit.MUXP = ainPos;
     adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
@@ -174,7 +188,7 @@ void Scale::calCell(loadCell *loadCellData)
                    " nPerMv: " + String(loadCellData->nPerMv, 6));
 
     adc.stopADC1();
-    adc.setRate(ADS126X_RATE_2400);
+    adc.setRate(ADS126X_RATE_400);
 }
 
 void Scale::tareCell(loadCell *loadCellData)

@@ -2,6 +2,7 @@
 #ifndef SCALE_H
 #define SCALE_H
 #include <ADS126X.h>
+#include <Smoothed.h>
 
 class Scale
 {
@@ -34,6 +35,9 @@ public:
 
     const float gPerN = 101.97162;
     const float nPerG = 1.0 / gPerN;
+
+    Smoothed<float> gramsSmoother;
+
     // const float g100InN =
     /**
     * HSFPAR303A force sensor 
@@ -84,8 +88,8 @@ public:
     ~Scale();
     void begin();
     float readGrams();
-    void updateLoadCellData(loadCell &loadCellData);
-    float readAdcV(int, int);
+    void updateLoadCellData(loadCell &loadCellData, uint8_t samples);
+    float readAdcV(uint8_t, uint8_t, uint8_t);
     void tareCell(loadCell *loadCellData);
     void resetCellsCal(); // clear calibration values
     void calCell(loadCell *loadCellData);
