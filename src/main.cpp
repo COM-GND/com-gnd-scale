@@ -147,30 +147,6 @@ void bleNotifyTask(void *params)
   }
 }
 
-// /**
-//  * Setup ADC registers for internal temperature reading
-//  */
-// void setupAdcTemperatureRead()
-// {
-//   // prepare registers to read temperature - see data sheet 9.3.4
-//   // disale chop mode
-//   adc.setChopMode(ADS126X_CHOP_0);
-//   // set gain to 1
-//   adc.setGain(ADS126X_GAIN_1);
-// }
-
-// float readAdcTemperature()
-// {
-//   signed long int outputCode = adc.readADC1(ADS126X_TEMP, ADS126X_TEMP);
-//   delay(250);
-//   outputCode = adc.readADC1(ADS126X_TEMP, ADS126X_TEMP);
-//   // convert to celsius - see data sheet 9.3.4 (Equation 9)
-//   float celsius = (float)((double)(outputCode - 122400.0) / 420.0) + 25.0;
-//   Serial.println("C: " + String(celsius, 4) + " raw: " + String(outputCode));
-
-//   return celsius;
-// }
-
 // void setupAdcLoadCellRead()
 // {
 //   adc.enableStatus();
@@ -380,6 +356,15 @@ void handleCli()
 
       Serial.println("End Calibration");
     }
+
+    if (input == 't')
+    {
+      Serial.println("Start Tare");
+
+      comGndScale.tare();
+
+      Serial.println("End Tare");
+    }
   }
 }
 
@@ -393,7 +378,6 @@ void loop()
 
   // const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
 
-  
   float weightG = comGndScale.readGrams();
 
   handleCli();

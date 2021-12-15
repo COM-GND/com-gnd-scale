@@ -90,10 +90,12 @@ public:
     float readGrams();
     void updateLoadCellData(loadCell &loadCellData, uint8_t samples);
     float readAdcV(uint8_t, uint8_t, uint8_t);
+    void tare();
     void tareCell(loadCell *loadCellData);
     void resetCellsCal(); // clear calibration values
     void calCell(loadCell *loadCellData);
     void calCells();
+    float readTemperature();
     float vToN(float volts, loadCell loadCellData);
     float vToG(float volts, loadCell loadCellData);
 };

@@ -30,6 +30,23 @@ void Scale::begin()
     adc.begin(spiCsPin);
     adc.enableInternalReference();
     adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
+
+    // // Reset FSCAL coefficients
+    // adc.REGISTER.FSCAL0.bit.FSCAL = 0x00;
+    // adc.REGISTER.FSCAL1.bit.FSCAL = 0x00;
+    // adc.REGISTER.FSCAL2.bit.FSCAL = 0x00;
+    // adc.writeRegister(ADS126X_FSCAL0);
+    // adc.writeRegister(ADS126X_FSCAL1);
+    // adc.writeRegister(ADS126X_FSCAL2);
+
+    // // Reset OFCAL coefficients
+    // adc.REGISTER.OFCAL0.bit.OFC = 0x00;
+    // adc.REGISTER.OFCAL1.bit.OFC = 0x00;
+    // adc.REGISTER.OFCAL2.bit.OFC = 0x00;
+    // adc.writeRegister(ADS126X_OFCAL0);
+    // adc.writeRegister(ADS126X_OFCAL1);
+    // adc.writeRegister(ADS126X_OFCAL2);
+
     adc.setContinuousMode();
     adc.setFilter(ADS126X_SINC1);
     adc.setChopMode(ADS126X_CHOP_1);
@@ -62,6 +79,8 @@ float Scale::readGrams()
         avgG += loadCells[i].g;
     }
 
+    float temp = readTemperature();
+
     // the weight is the average of the 4 cells.
     avgG /= 4.0;
 
@@ -75,6 +94,7 @@ float Scale::readGrams()
     float snr = log10f(avgG) - log10f(noise);
 
     Serial.println("t: " + String(readTime) +
+                   " c " + String(temp, 2) +
                    " sps " + String(1000.0 / readTime) +
                    " g: " + String(avgG) +
                    " avg: " + String(smoothedG) +
@@ -100,6 +120,9 @@ void Scale::updateLoadCellData(loadCell &loadCellData, uint8_t samples = 1)
 
 float Scale::readAdcV(uint8_t ainPos, uint8_t ainNeg, uint8_t samples = 1)
 {
+    // Preset the pin registers while adc is stopped.
+    // This a patch fro ads126x library to preven it from changing registers
+    // while the adc is started.
     adc.REGISTER.INPMUX.bit.MUXN = ainNeg;
     adc.REGISTER.INPMUX.bit.MUXP = ainPos;
     adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
@@ -191,6 +214,13 @@ void Scale::calCell(loadCell *loadCellData)
     adc.setRate(ADS126X_RATE_400);
 }
 
+void Scale::tare()
+{
+    tareCell(&loadCells[0]);
+    tareCell(&loadCells[1]);
+    tareCell(&loadCells[2]);
+    tareCell(&loadCells[3]);
+}
 void Scale::tareCell(loadCell *loadCellData)
 {
     adc.stopADC1();
@@ -206,6 +236,45 @@ void Scale::tareCell(loadCell *loadCellData)
     }
     loadCellData->vOffset = (float)(offsetTotal / (float)samples);
     Serial.println(" Offset avg: " + String(loadCellData->vOffset, 6));
+}
+
+float Scale::readTemperature()
+{
+    // prepare registers to read temperature - see data sheet 9.3.4
+    // disable chop and set gain to 1;
+    adc.setChopMode(ADS126X_CHOP_0);
+    adc.setGain(ADS126X_GAIN_1);
+
+    // select temperature input mux
+    adc.REGISTER.INPMUX.bit.MUXN = ADS126X_TEMP;
+    adc.REGISTER.INPMUX.bit.MUXP = ADS126X_TEMP;
+    adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
+
+    // select internal ref
+    adc.setReference(ADS126X_REF_NEG_INT, ADS126X_REF_POS_INT);
+
+    adc.writeRegister(ADS126X_INPMUX); // replace on ads126x
+
+    adc.startADC1();
+    while (digitalRead(rdryPin) == HIGH)
+    {
+        // wait
+    }
+    signed long int outputCode = adc.readADC1(ADS126X_TEMP, ADS126X_TEMP);
+
+    adc.stopADC1();
+    // convert to celsius - see data sheet 9.3.4 (Equation 9)
+    // float celsius = (float)(((double)outputCode - 122400.0) / 420.0) + 25.0;
+    double tempReading = (double)25 + ((((double)outputCode * (double)0.00116415321) - (double)122400) / (double)420);
+
+    // Serial.println("C: " + String(celsius, 4) + " raw: " + String(outputCode));
+
+    // return to settings for reading adc inputs
+    adc.setChopMode(ADS126X_CHOP_1);
+    adc.setGain(ADS126X_GAIN_32);
+    adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
+
+    return (float)tempReading;
 }
 
 float Scale::vToN(float volts, loadCell loadCellData)
