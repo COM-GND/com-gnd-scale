@@ -8,7 +8,7 @@ Plotter p;
 
 /**
  * Voltage reference pins are AIN0 (pos) and AIN1 (neg)
- * These are connected to the +4VA and GNDA reference voltage outputs
+ * These are connected to the +5VA and GNDA reference voltage outputs
  *
  */
 Scale::Scale()
@@ -36,7 +36,10 @@ Scale::~Scale()
 
 void Scale::begin()
 {
+    pinMode(excCtrlPin, OUTPUT);    // SPDT H-Bridge direction control pin
+    pinMode(excEnablePin, OUTPUT);  // SPDT H-Bridge enable control pin
     pinMode(rdryPin, INPUT_PULLUP); // adc data ready (RDRY) pin (active low)
+
     adc.begin(spiCsPin);
     adc.enableInternalReference();
     adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
@@ -59,9 +62,15 @@ void Scale::begin()
 
     adc.setContinuousMode();
     adc.setFilter(ADS126X_SINC1);
+
+    // TODO disable chop mode for AC Bridge Excitation
     adc.setChopMode(ADS126X_CHOP_1);
     adc.setGain(ADS126X_GAIN_32);
     adc.enablePGA();
+
+    // enable H-Bridge
+    digitalWrite(excEnablePin, HIGH);
+
     delay(1000);
     tare();
     Serial.println(
@@ -75,6 +84,24 @@ void Scale::begin()
     p.Begin();
     p.AddTimeGraph("Temp", 500, "C", plotTemp);
     p.AddTimeGraph("Weight", 500, "g", plotG);
+}
+
+void Scale::toggleBridge()
+{
+    // TODO: It might not be necessary to disable H-Bridge during switching
+    // Testing needed.
+
+    // disable H-Bridge Output
+    digitalWrite(excEnablePin, LOW);
+    // toggle bridge
+    digitalWrite(excCtrlPin, bridgeDir);
+    bridgeDir = !bridgeDir;
+
+    // TODO change ADC reference polarity. - see ADS126X.cpp MODE0 register
+    // ADS126x::setRefRevMode(uint8_t bridgeDir);
+
+    // enable H-Bridge Output
+    digitalWrite(excEnablePin, HIGH);
 }
 
 float Scale::readGrams()
@@ -98,7 +125,7 @@ float Scale::readGrams()
     unsigned long readEndTimestamp = millis();
     unsigned long readTime = readEndTimestamp - readStartTimestamp;
 
-    // estimate SNR
+    // estimate Signal-to-noise-ratio (SNR)
     gramsSmoother.add(avgG);
     float smoothedG = gramsSmoother.get();
     float noise = abs(smoothedG - avgG);
@@ -137,7 +164,7 @@ void Scale::updateLoadCellData(loadCell &loadCellData, uint8_t samples = 1)
 float Scale::readAdcV(uint8_t ainPos, uint8_t ainNeg, uint8_t samples = 1)
 {
     // Preset the pin registers while adc is stopped.
-    // This a patch fro ads126x library to preven it from changing registers
+    // This a patch for ads126x library to prevent it from changing registers
     // while the adc is started.
     adc.REGISTER.INPMUX.bit.MUXN = ainNeg;
     adc.REGISTER.INPMUX.bit.MUXP = ainPos;

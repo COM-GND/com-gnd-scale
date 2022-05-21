@@ -60,6 +60,22 @@ Scale comGndScale;
  * pin 4 gnd Exc - -> AD AIN5 (REF-)
  */
 
+/**
+ * DG2733E SPDT Switch
+ * Used as an H-Bridge to alternate the polarity of the Force Sensors'
+ * Excitation Voltage.
+ * Pin 1 V+   -> +4VA
+ * Pin 2 NO1  -> +4VA
+ * Pin 3 COM1 -> Exc1 (Force Sensor Pin 1)
+ * Pin 4 IN   -> EXCCTRL - ESP32 GPIO 25
+ * Pin 5 NC1  -> GNDA
+ * Pin 6 GND  -> GNDA
+ * Pin 7 NC2  -> +4VA
+ * Pin 8 EN   -> EXCEN - ESP32 GPIO26
+ * Pin 9 COM2 -> Exc2 (Force Sensor pin 4)
+ * Pin 10 N02 -> GNDA
+ */
+
 float lastGrams = 0;
 float grams = 0;
 Smoothed<float> voltageSmoother;
@@ -182,6 +198,15 @@ void handleCli()
       comGndScale.tare();
 
       Serial.println("End Tare");
+    }
+
+    if (input == 'x')
+    {
+      Serial.println("Toggle Bridge Polarity");
+
+      comGndScale.toggleBridge();
+
+      Serial.println("End Toggle Bridge Polarity");
     }
   }
 }

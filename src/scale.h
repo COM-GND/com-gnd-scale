@@ -11,8 +11,8 @@ class Scale
 public:
     ADS126X adc;
 
-    /** 
-     * Pins 
+    /**
+     * Pins
      * set-up for ESP32 Devkit-c
      * see: https://circuits4you.com/2018/12/31/esp32-wroom32-devkit-analog-read-example/)
      */
@@ -24,14 +24,18 @@ public:
      * SPID =   MOSI = data out - VSPI uses GPIO23
      * SPIQ =   MISO = data in  - VSPI uses GPIO19
      * VSPIWP = START           - VSPI uses GPIO22
-     * CK =     CLK             - VSPI uses GPIO18
-     * CS =     VSPICSO         - VSPI uses GPIO5
+     * CK =     CLK (CK)        - VSPI uses GPIO18
+     * CS =     CS              - VSPI uses GPIO5
      */
     int spiCsPin = 5;     // SPI CS pin
     int spiStartPin = 22; // SPI Start pin
     int rdryPin = 17;     // ADS126X RDY pin (14) -> ESP32 io pin (active low)
     float adcVRef = 3.86; // Reference Voltage
     float adcPga = 32.0;  // Gain
+
+    int excCtrlPin = 25;
+    int excEnablePin = 26;
+
     // ADC fullscale range
     double adcFsr = (double)((double)adcVRef / (double)adcPga);
 
@@ -40,14 +44,13 @@ public:
 
     Smoothed<float> gramsSmoother;
 
-    // const float g100InN =
     /**
-    * HSFPAR303A force sensor 
-    * Pin 1 vdd Exc + -> ADC AIN4 (REF+)
-    * pin 2 v1  Out + -> ADC AIN0
-    * pin 3 v2  Out - -> ADC AIN1
-    * pin 4 gnd Exc - -> AD AIN5 (REF-)
-    */
+     * HSFPAR303A force sensor
+     * Pin 1 vdd Exc + -> ADC AIN4 (REF+)
+     * pin 2 v1  Out + -> ADC AIN0
+     * pin 3 v2  Out - -> ADC AIN1
+     * pin 4 gnd Exc - -> AD AIN5 (REF-)
+     */
 
     const float numberOfCells = 1.0; // number of load cells wired in parallel per adc channel
     const float cellSensitivity = 3.7;
@@ -69,6 +72,8 @@ public:
     const int cell3AdcPosPin = 8; // ADS126X pin AIN4, positive input
     const int cell3AdcNegPin = 9; // ADS126X pin AIN5, negative input
 
+    int bridgeDir = 0;
+
     struct loadCell
     {
         int posPin;        // the cell's positive V pin number
@@ -89,6 +94,7 @@ public:
     Scale();
     ~Scale();
     void begin();
+    void toggleBridge();
     float readGrams();
     void updateLoadCellData(loadCell &loadCellData, uint8_t samples);
     float readAdcV(uint8_t, uint8_t, uint8_t);
