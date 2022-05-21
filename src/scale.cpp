@@ -1,6 +1,16 @@
 #include <Arduino.h>
+#include <Plotter.h>
 #include "scale.h"
 
+double plotTemp = 0;
+double plotG = 0;
+Plotter p;
+
+/**
+ * Voltage reference pins are AIN0 (pos) and AIN1 (neg)
+ * These are connected to the +4VA and GNDA reference voltage outputs
+ *
+ */
 Scale::Scale()
 {
     // rdryPin = _rdryPin;
@@ -52,18 +62,19 @@ void Scale::begin()
     adc.setChopMode(ADS126X_CHOP_1);
     adc.setGain(ADS126X_GAIN_32);
     adc.enablePGA();
-    delay(500);
-    tareCell(&loadCells[0]);
-    tareCell(&loadCells[1]);
-    tareCell(&loadCells[2]);
-    tareCell(&loadCells[3]);
+    delay(1000);
+    tare();
     Serial.println(
         "Offsets: " + String(loadCells[0].vOffset) +
         " , " + String(loadCells[1].vOffset) +
         " , " + String(loadCells[2].vOffset) +
         " , " + String(loadCells[3].vOffset));
-    adc.setRate(ADS126X_RATE_400);
+    adc.setRate(STANDARD_SPS);
     gramsSmoother.begin(SMOOTHED_AVERAGE, 10);
+
+    p.Begin();
+    p.AddTimeGraph("Temp", 500, "C", plotTemp);
+    p.AddTimeGraph("Weight", 500, "g", plotG);
 }
 
 float Scale::readGrams()
@@ -93,17 +104,22 @@ float Scale::readGrams()
     float noise = abs(smoothedG - avgG);
     float snr = log10f(avgG) - log10f(noise);
 
-    Serial.println("t: " + String(readTime) +
-                   " c " + String(temp, 2) +
-                   " sps " + String(1000.0 / readTime) +
-                   " g: " + String(avgG) +
-                   " avg: " + String(smoothedG) +
-                   " noise: " + String(noise, 4) +
-                   " snr: " + String(snr, 4) +
-                   " : " + String(loadCells[0].g, 6) +
-                   " , " + String(loadCells[1].g, 6) +
-                   " , " + String(loadCells[2].g, 6) +
-                   " , " + String(loadCells[3].g, 6));
+    // Serial.println("t: " + String(readTime) +
+    //                " c " + String(temp, 2) +
+    //                " sps " + String(1000.0 / readTime) +
+    //                " g: " + String(avgG) +
+    //                " avg: " + String(smoothedG) +
+    //                " noise: " + String(noise, 4) +
+    //                " snr: " + String(snr, 4) +
+    //                " : " + String(loadCells[0].g, 6) +
+    //                " , " + String(loadCells[1].g, 6) +
+    //                " , " + String(loadCells[2].g, 6) +
+    //                " , " + String(loadCells[3].g, 6));
+
+    plotTemp = temp;
+    plotG = avgG;
+
+    p.Plot();
 
     return avgG;
 }
@@ -166,7 +182,7 @@ void Scale::calCells()
  * Each cell requires calibration. The 100g reference Reading of each cell changes
  * according to the position of the weight relative to the cell. Multiple
  * readings at different weight positions are needed to try to capture the absolute
- * max and min ref values. 
+ * max and min ref values.
  */
 void Scale::calCell(loadCell *loadCellData)
 {
@@ -211,20 +227,24 @@ void Scale::calCell(loadCell *loadCellData)
                    " nPerMv: " + String(loadCellData->nPerMv, 6));
 
     adc.stopADC1();
-    adc.setRate(ADS126X_RATE_400);
+    adc.setRate(STANDARD_SPS);
 }
 
 void Scale::tare()
 {
+    adc.stopADC1();
+    adc.setRate(ADS126X_RATE_2_5);
     tareCell(&loadCells[0]);
     tareCell(&loadCells[1]);
     tareCell(&loadCells[2]);
     tareCell(&loadCells[3]);
+    adc.stopADC1();
+    adc.setRate(STANDARD_SPS);
 }
 void Scale::tareCell(loadCell *loadCellData)
 {
-    adc.stopADC1();
-    adc.setRate(ADS126X_RATE_2_5);
+    // adc.stopADC1();
+    // adc.setRate(ADS126X_RATE_2_5);
     double offsetTotal = 0;
     uint8_t samples = 1;
 

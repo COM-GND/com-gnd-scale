@@ -1,0 +1,11 @@
+FILE_TYPE = MULTI_PHYS_TABLE;
+
+PART 'DG2733EDQ_T1_GE3'
+CLASS = IC
+{========================================================================================}
+:"MANUFACTURER_NAME", "MANUFACTURER_PART_NUMBER"= "PART_NUMBER", "JEDEC_TYPE", "PACK_TYPE", "MOUSER_PART_NUMBER", "MOUSER_PRICE/STOCK", "ARROW_PART_NUMBER", "ARROW_PRICE/STOCK", "DESCRIPTION", "DATASHEET", "HEIGHT";
+{========================================================================================}
+ "Vishay", "DG2733EDQ-T1-GE3" (!) = "", "SOP50P490X110-10N", "Small Outline Packages", "78-DG2733EDQ-T1-GE3", "https://www.mouser.co.uk/ProductDetail/Vishay-Siliconix/DG2733EDQ-T1-GE3?qs=fA06TrWLL4ck7gB%2F0Ro2Ig%3D%3D", "DG2733EDQ-T1-GE3", "https://www.arrow.com/en/products/dg2733edq-t1-ge3/vishay", "Analog Switch ICs", "https://www.mouser.com/datasheet/2/427/dg2535e_dg2733e-1108706.pdf", "1.1 mm"
+END_PART
+
+END.

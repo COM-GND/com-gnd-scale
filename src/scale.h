@@ -4,6 +4,8 @@
 #include <ADS126X.h>
 #include <Smoothed.h>
 
+#define STANDARD_SPS ADS126X_RATE_400
+
 class Scale
 {
 public:

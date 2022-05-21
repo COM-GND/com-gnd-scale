@@ -1,0 +1,9 @@
+Manufacturer=Vishay
+PartNumber=DG2733EDQ-T1-GE3
+PartCategory=Integrated Circuit
+PackageCategory=Small Outline Packages
+PinCount=10
+Version=1.1
+Released=2020-02-04 03:48:19
+Downloaded=2022-03-26 21:32:29
+3D=Y

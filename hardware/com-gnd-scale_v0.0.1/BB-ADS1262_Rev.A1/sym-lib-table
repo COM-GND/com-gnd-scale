@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "BB-ADS1262-Rev.A")(type "Legacy")(uri "${KIPRJMOD}/BB-ADS1262-Rev.A.lib")(options "")(descr ""))
+  (lib (name "DG2733EDQ-T1-GE3")(type "KiCad")(uri "/Users/erikw/Documents/com-gnd/com-gnd-scale/hardware/LIB_DG2733EDQ-T1-GE3/DG2733EDQ-T1-GE3/KiCad/DG2733EDQ-T1-GE3.kicad_sym")(options "")(descr ""))
+)

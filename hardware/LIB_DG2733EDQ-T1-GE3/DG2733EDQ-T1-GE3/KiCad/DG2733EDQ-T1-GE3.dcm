@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP DG2733EDQ-T1-GE3
+D Analog Switch ICs
+K
+F https://www.mouser.com/datasheet/2/427/dg2535e_dg2733e-1108706.pdf
+$ENDCMP
+#
+#End Doc Library

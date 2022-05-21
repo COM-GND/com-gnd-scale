@@ -1,0 +1,6 @@
+(sym_lib_table
+  (lib (name "ESP32-DevKit-Lipo_Rev_C")(type "Legacy")(uri "/Users/erikw/Documents/com-gnd/com-gnd-scale/hardware/com-gnd-scale_v0.0.1/ESP32-DevKit-LiPo-Rev.C/ESP32-DevKit-Lipo_Rev_C.lib")(options "")(descr ""))
+  (lib (name "BB-ADS1262-Rev.A")(type "Legacy")(uri "/Users/erikw/Documents/com-gnd/com-gnd-scale/hardware/com-gnd-scale_v0.0.1/BB-ADS1262_Rev.A1/BB-ADS1262-Rev.A.lib")(options "")(descr ""))
+  (lib (name "DG2733EDQ-T1-GE3")(type "KiCad")(uri "/Users/erikw/Documents/com-gnd/com-gnd-scale/hardware/LIB_DG2733EDQ-T1-GE3/DG2733EDQ-T1-GE3/KiCad/DG2733EDQ-T1-GE3.kicad_sym")(options "")(descr ""))
+  (lib (name "Library")(type "KiCad")(uri "${KIPRJMOD}/Library.kicad_sym")(options "")(descr ""))
+)
