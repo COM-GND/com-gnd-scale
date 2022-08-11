@@ -88,6 +88,12 @@ void Scale::begin()
 
 void Scale::toggleBridge()
 {
+    // This is used for implementing "AC Bridge Excitation" as described in the TI doc:
+    // "High-Resolution, Low-Drift, Precision Weigh-Scale Reference Design with AC Bridge Excitation"
+    // See: TIDUAC1A.pdf
+    // The approach is designed to cancel out systematic sensor error caused by any offset and drift
+    // in both the ADC and reference voltage.
+
     // TODO: It might not be necessary to disable H-Bridge during switching
     // Testing needed.
 

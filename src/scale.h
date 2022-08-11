@@ -72,7 +72,7 @@ public:
     const int cell3AdcPosPin = 8; // ADS126X pin AIN4, positive input
     const int cell3AdcNegPin = 9; // ADS126X pin AIN5, negative input
 
-    int bridgeDir = 0;
+    uint8_t bridgeDir = 0; // keep state of AC Bridge polarity. Used to set ADS126x::setRefRevMode()
 
     struct loadCell
     {
