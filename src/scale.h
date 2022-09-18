@@ -33,8 +33,8 @@ public:
     float adcVRef = 3.86; // Reference Voltage
     float adcPga = 32.0;  // Gain
 
-    int excCtrlPin = 25;
-    int excEnablePin = 26;
+    int excCtrlPin = 25;   // Excitation SPDT H-Bridge Direction Control
+    int excEnablePin = 26; // Excitation SPDT H-Bridge Enable
 
     // ADC fullscale range
     double adcFsr = (double)((double)adcVRef / (double)adcPga);

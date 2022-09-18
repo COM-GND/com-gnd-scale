@@ -54,10 +54,12 @@ Scale comGndScale;
 
 /**
  * HSFPAR303A force sensor
- * Pin 1 vdd Exc + -> ADC AIN4 (REF+)
- * pin 2 v1  Out + -> ADC AIN0
- * pin 3 v2  Out - -> ADC AIN1
- * pin 4 gnd Exc - -> AD AIN5 (REF-)
+ * Force sensor is connected to GNDA and +4VA through SPDT
+ * Alternating Polarity Circuit (aka "AC Excitation Circuit").
+ * Pin 1 vdd Exc +/- -> Exc1 (SPDT)
+ * pin 2 v1  Out +/- -> ADC AINx
+ * pin 3 v2  Out -/+ -> ADC AINx+1
+ * pin 4 gnd Exc -/+ -> Exc2 (SPDT)
  */
 
 /**

@@ -8,7 +8,7 @@ Plotter p;
 
 /**
  * Voltage reference pins are AIN0 (pos) and AIN1 (neg)
- * These are connected to the +5VA and GNDA reference voltage outputs
+ * These are connected to the +4VA and GNDA reference voltage outputs
  *
  */
 Scale::Scale()
@@ -86,14 +86,16 @@ void Scale::begin()
     p.AddTimeGraph("Weight", 500, "g", plotG);
 }
 
+/**
+ * Toggle the Voltage Polarity of the ADC
+ * This is used for implementing "AC Bridge Excitation" as described in the TI doc:
+ * "High-Resolution, Low-Drift, Precision Weigh-Scale Reference Design with AC Bridge Excitation"
+ * See: TIDUAC1A.pdf
+ * The approach is designed to cancel out systematic sensor error caused by any offset and drift
+ * in both the ADC and reference voltage.
+ */
 void Scale::toggleBridge()
 {
-    // This is used for implementing "AC Bridge Excitation" as described in the TI doc:
-    // "High-Resolution, Low-Drift, Precision Weigh-Scale Reference Design with AC Bridge Excitation"
-    // See: TIDUAC1A.pdf
-    // The approach is designed to cancel out systematic sensor error caused by any offset and drift
-    // in both the ADC and reference voltage.
-
     // TODO: It might not be necessary to disable H-Bridge during switching
     // Testing needed.
 
@@ -101,11 +103,12 @@ void Scale::toggleBridge()
     digitalWrite(excEnablePin, LOW);
     // toggle bridge
     digitalWrite(excCtrlPin, bridgeDir);
-    bridgeDir = !bridgeDir;
 
     // TODO change ADC reference polarity. - see ADS126X.cpp MODE0 register
     // ADS126x::setRefRevMode(uint8_t bridgeDir);
+    adc.setRefRevMode(bridgeDir);
 
+    bridgeDir = !bridgeDir;
     // enable H-Bridge Output
     digitalWrite(excEnablePin, HIGH);
 }
@@ -113,6 +116,7 @@ void Scale::toggleBridge()
 float Scale::readGrams()
 {
     float avgG = 0;
+    // toggleBridge();
     unsigned long readStartTimestamp = millis();
     for (int i = 0; i < 4; i++)
     {
