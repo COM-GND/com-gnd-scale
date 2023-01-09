@@ -41,30 +41,46 @@ void Scale::begin()
     pinMode(rdryPin, INPUT_PULLUP); // adc data ready (RDRY) pin (active low)
 
     adc.begin(spiCsPin);
-    adc.enableInternalReference();
+
+    // internal reference is needed when reading internal adc temperature.
+    // adc.enableInternalReference();
+
+    /**
+     * ADC1 Offset System Calibration
+     * The offset system-calibration command corrects ADC1 system offset error.
+     * For this type of calibration, externally short the system inputs before the command.
+     * When the SYSOCAL1 command is sent, the ADC averages 16 readings to reduce conversion
+     * noise for an accurate calibration. When calibration is complete, the offset
+     * calibration result is written to the 24-bit offset calibration register (OFCAL[2:0]).
+     * The offset calibration register is disabled in chop mode
+     **/
+    // adc.calibrateSelfOffsetADC1();
+
+    // setup to use external references
     adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
 
-    // // Reset FSCAL coefficients
-    // adc.REGISTER.FSCAL0.bit.FSCAL = 0x00;
-    // adc.REGISTER.FSCAL1.bit.FSCAL = 0x00;
-    // adc.REGISTER.FSCAL2.bit.FSCAL = 0x00;
-    // adc.writeRegister(ADS126X_FSCAL0);
-    // adc.writeRegister(ADS126X_FSCAL1);
-    // adc.writeRegister(ADS126X_FSCAL2);
+    // Reset FSCAL coefficients
+    adc.REGISTER.FSCAL0.bit.FSCAL = 0x00;
+    adc.REGISTER.FSCAL1.bit.FSCAL = 0x00;
+    adc.REGISTER.FSCAL2.bit.FSCAL = 0x40;
+    adc.writeRegister(ADS126X_FSCAL0);
+    adc.writeRegister(ADS126X_FSCAL1);
+    adc.writeRegister(ADS126X_FSCAL2);
 
-    // // Reset OFCAL coefficients
-    // adc.REGISTER.OFCAL0.bit.OFC = 0x00;
-    // adc.REGISTER.OFCAL1.bit.OFC = 0x00;
-    // adc.REGISTER.OFCAL2.bit.OFC = 0x00;
-    // adc.writeRegister(ADS126X_OFCAL0);
-    // adc.writeRegister(ADS126X_OFCAL1);
-    // adc.writeRegister(ADS126X_OFCAL2);
+    // Reset OFCAL coefficients
+    adc.REGISTER.OFCAL0.bit.OFC = 0x00;
+    adc.REGISTER.OFCAL1.bit.OFC = 0x00;
+    adc.REGISTER.OFCAL2.bit.OFC = 0x00;
+    adc.writeRegister(ADS126X_OFCAL0);
+    adc.writeRegister(ADS126X_OFCAL1);
+    adc.writeRegister(ADS126X_OFCAL2);
 
     adc.setContinuousMode();
     adc.setFilter(ADS126X_SINC1);
 
-    // TODO disable chop mode for AC Bridge Excitation
-    adc.setChopMode(ADS126X_CHOP_1);
+    // disable chop mode for AC Bridge Excitation
+    adc.setChopMode(ADS126X_CHOP_0);
+
     adc.setGain(ADS126X_GAIN_32);
     adc.enablePGA();
 
@@ -72,7 +88,7 @@ void Scale::begin()
     digitalWrite(excEnablePin, HIGH);
 
     delay(1000);
-    tare();
+    // tare();
     Serial.println(
         "Offsets: " + String(loadCells[0].vOffset) +
         " , " + String(loadCells[1].vOffset) +
@@ -96,6 +112,19 @@ void Scale::begin()
  */
 void Scale::toggleBridge()
 {
+
+    // When bridgeDir == 1, refRef mode is set on the ADC
+    uint8_t newMode = bridgeDir == 0 ? 1 : 0;
+    setBridgeAcMode(newMode);
+}
+
+/**
+ * Set the ADC refRev flag.
+ * @param refRev - Ref is reverse when refRev == 1;
+ */
+void Scale::setBridgeAcMode(uint8_t refRev)
+{
+    bridgeDir = refRev;
     // TODO: It might not be necessary to disable H-Bridge during switching
     // Testing needed.
 
@@ -104,11 +133,8 @@ void Scale::toggleBridge()
     // toggle bridge
     digitalWrite(excCtrlPin, bridgeDir);
 
-    // TODO change ADC reference polarity. - see ADS126X.cpp MODE0 register
-    // ADS126x::setRefRevMode(uint8_t bridgeDir);
     adc.setRefRevMode(bridgeDir);
 
-    bridgeDir = !bridgeDir;
     // enable H-Bridge Output
     digitalWrite(excEnablePin, HIGH);
 }
@@ -127,7 +153,7 @@ float Scale::readGrams()
         avgG += loadCells[i].g;
     }
 
-    float temp = readTemperature();
+    // float temp = readTemperature();
 
     // the weight is the average of the 4 cells.
     avgG /= 4.0;
@@ -141,22 +167,22 @@ float Scale::readGrams()
     float noise = abs(smoothedG - avgG);
     float snr = log10f(avgG) - log10f(noise);
 
-    // Serial.println("t: " + String(readTime) +
-    //                " c " + String(temp, 2) +
-    //                " sps " + String(1000.0 / readTime) +
-    //                " g: " + String(avgG) +
-    //                " avg: " + String(smoothedG) +
-    //                " noise: " + String(noise, 4) +
-    //                " snr: " + String(snr, 4) +
-    //                " : " + String(loadCells[0].g, 6) +
-    //                " , " + String(loadCells[1].g, 6) +
-    //                " , " + String(loadCells[2].g, 6) +
-    //                " , " + String(loadCells[3].g, 6));
+    Serial.println("t: " + String(readTime) +
+                   //    " c " + String(temp, 2) +
+                   " sps " + String(1000.0 / readTime) +
+                   " g: " + String(avgG) +
+                   " avg: " + String(smoothedG) +
+                   " noise: " + String(noise, 4) +
+                   " snr: " + String(snr, 4) +
+                   " : " + String(loadCells[0].g, 6) +
+                   " , " + String(loadCells[1].g, 6) +
+                   " , " + String(loadCells[2].g, 6) +
+                   " , " + String(loadCells[3].g, 6));
 
-    plotTemp = temp;
+    // plotTemp = temp;
     plotG = avgG;
 
-    p.Plot();
+    // p.Plot();
 
     return avgG;
 }
@@ -171,6 +197,13 @@ void Scale::updateLoadCellData(loadCell &loadCellData, uint8_t samples = 1)
     loadCellData.n = n;
 }
 
+/**
+ * Read the the voltage output from a single ADC POS/NEG inputs pin pair
+ * @param ainPos - the pin number of the positive input
+ * @param ainNeg - the pin number of the negative input
+ * @param samples - the number of samples to take. The result will be the average value of all samples taken.
+ * @return the average voltage
+ */
 float Scale::readAdcV(uint8_t ainPos, uint8_t ainNeg, uint8_t samples = 1)
 {
     // Preset the pin registers while adc is stopped.
@@ -196,9 +229,16 @@ float Scale::readAdcV(uint8_t ainPos, uint8_t ainNeg, uint8_t samples = 1)
     float voltage = (float)((adcResolution) * (double)(outputCode));
     // Serial.print(" outputCode: " + String(outputCode));
 
+    // if the AC bridge is currently inverted, also invert the voltage reading.
+    // when bridgeDir == 1, refRev mode is set on ADC.
+    // voltage = bridgeDir ? -1.0 * voltage : voltage;
+
     return voltage;
 }
 
+/**
+ * Reset calibration of all load cells
+ */
 void Scale::resetCellsCal()
 {
     for (int i = 0; i < 4; i++)
@@ -207,6 +247,10 @@ void Scale::resetCellsCal()
         loadCells[i].ref100gVMin = 0;
     }
 }
+
+/**
+ * Calibrate all loads cells
+ */
 void Scale::calCells()
 {
     for (int i = 0; i < 4; i++)
@@ -216,6 +260,7 @@ void Scale::calCells()
 }
 
 /**
+ * Calibrate a single load cell
  * Each cell requires calibration. The 100g reference Reading of each cell changes
  * according to the position of the weight relative to the cell. Multiple
  * readings at different weight positions are needed to try to capture the absolute
@@ -267,6 +312,9 @@ void Scale::calCell(loadCell *loadCellData)
     adc.setRate(STANDARD_SPS);
 }
 
+/**
+ * Tare all load cells
+ */
 void Scale::tare()
 {
     adc.stopADC1();
@@ -278,13 +326,21 @@ void Scale::tare()
     adc.stopADC1();
     adc.setRate(STANDARD_SPS);
 }
+
+/**
+ * Tare an single laod cell
+ */
 void Scale::tareCell(loadCell *loadCellData)
 {
     // adc.stopADC1();
     // adc.setRate(ADS126X_RATE_2_5);
     double offsetTotal = 0;
-    uint8_t samples = 1;
+    uint8_t samples = 8;
 
+    uint8_t curMode = bridgeDir;
+
+    setBridgeAcMode(0);
+    delay(250);
     for (uint8_t i = 0; i < samples; i++)
     {
         float offset = readAdcV(loadCellData->posPin, loadCellData->negPin); // read the voltage
@@ -293,13 +349,32 @@ void Scale::tareCell(loadCell *loadCellData)
     }
     loadCellData->vOffset = (float)(offsetTotal / (float)samples);
     Serial.println(" Offset avg: " + String(loadCellData->vOffset, 6));
+
+    setBridgeAcMode(1);
+    delay(250);
+
+    offsetTotal = 0;
+
+    for (uint8_t i = 0; i < samples; i++)
+    {
+        float offset = readAdcV(loadCellData->posPin, loadCellData->negPin); // read the voltage
+        offsetTotal += offset;
+        Serial.println(" Rev V Offset: " + String(offset, 6));
+    }
+    loadCellData->revVOffset = (float)(offsetTotal / (float)samples);
+    Serial.println(" Rev V Offset avg: " + String(loadCellData->revVOffset, 6));
+
+    setBridgeAcMode(curMode);
+    delay(250);
 }
 
 float Scale::readTemperature()
 {
+    // TODO handle refRef from toggleBridgeDir
+
     // prepare registers to read temperature - see data sheet 9.3.4
     // disable chop and set gain to 1;
-    adc.setChopMode(ADS126X_CHOP_0);
+    // adc.setChopMode(ADS126X_CHOP_0);
     adc.setGain(ADS126X_GAIN_1);
 
     // select temperature input mux
@@ -327,7 +402,7 @@ float Scale::readTemperature()
     // Serial.println("C: " + String(celsius, 4) + " raw: " + String(outputCode));
 
     // return to settings for reading adc inputs
-    adc.setChopMode(ADS126X_CHOP_1);
+    // adc.setChopMode(ADS126X_CHOP_1);
     adc.setGain(ADS126X_GAIN_32);
     adc.setReference(ADS126X_REF_NEG_AIN1, ADS126X_REF_POS_AIN0);
 
@@ -339,7 +414,9 @@ float Scale::vToN(float volts, loadCell loadCellData)
     // 57.128
     const float newtonsPerMv = (cellFsr / cellMaxLoad) * numberOfCells;
     // TODO use a calibrated conversion factor;
-    float newtons = (volts - loadCellData.vOffset) * loadCellData.nPerMv;
+    float offset = bridgeDir == 0 ? loadCellData.vOffset : loadCellData.revVOffset;
+    float newtons = (volts - offset) * loadCellData.nPerMv;
+
     return newtons;
 }
 

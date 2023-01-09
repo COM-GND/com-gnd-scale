@@ -78,7 +78,8 @@ public:
     {
         int posPin;        // the cell's positive V pin number
         int negPin;        // the cell's negative V pin number
-        float vOffset;     // the 0g offset volate
+        float vOffset;     // the 0g offset voltage
+        float revVOffset;  // the 0g offset with refRev is set
         float ref100gVMax; // the max V when calibrating with 100g reference weight
         float ref100gVMin; // the max V when calibrating with 100g reference weight
         float nPerMv;      // the calibrated newtons per mV
@@ -95,6 +96,7 @@ public:
     ~Scale();
     void begin();
     void toggleBridge();
+    void setBridgeAcMode(uint8_t refRev);
     float readGrams();
     void updateLoadCellData(loadCell &loadCellData, uint8_t samples);
     float readAdcV(uint8_t, uint8_t, uint8_t);
